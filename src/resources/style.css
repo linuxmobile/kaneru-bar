@@ -1,0 +1,29 @@
+window {
+  background-color: #2e3440;
+  color: #eceff4;
+}
+
+.app-menu-button {
+  padding: 0px;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  background-image: none;
+  background-color: transparent;
+  min-height: 0;
+  min-width: 0;
+}
+
+.app-menu-button:hover,
+.app-menu-button:focus,
+.app-menu-button:active {
+  border: none;
+  outline: none;
+  box-shadow: none;
+  background-image: none;
+  background-color: transparent;
+}
+
+.app-menu-button image {
+  -gtk-icon-size: 24px;
+}
