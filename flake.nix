@@ -40,6 +40,7 @@
             nativeBuildInputs = with pkgs; [
               rustPlatform.bindgenHook
               pkg-config
+              openssl
               wrapGAppsHook4
               glib
             ];

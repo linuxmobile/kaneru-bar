@@ -1,0 +1,313 @@
+use crate::utils::{Notification, Urgency};
+use gtk4::prelude::*;
+use gtk4::{
+    glib, Align, ApplicationWindow, Box, Button, Image, Justification, Label, Orientation,
+    Revealer, RevealerTransitionType,
+};
+use gtk4_layer_shell::{Edge, Layer, LayerShell};
+use std::{cell::RefCell, rc::Rc, time::Duration};
+use tokio::sync::mpsc;
+
+const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
+const CRITICAL_TIMEOUT: Duration = Duration::from_secs(10);
+const POPUP_WINDOW_CLASS: &str = "notification-popup-window";
+
+#[derive(Debug)]
+pub enum PopupCommand {
+    Close(u32),
+    ActionInvoked(u32, String),
+}
+
+pub struct NotificationPopup {
+    window: ApplicationWindow,
+    notification_id: u32,
+    command_sender: mpsc::Sender<PopupCommand>,
+    close_timer_source_id: Rc<RefCell<Option<glib::SourceId>>>,
+    vertical_position: i32,
+    is_closing: Rc<RefCell<bool>>,
+}
+
+impl NotificationPopup {
+    pub fn new(
+        app: &gtk4::Application,
+        notification: &Notification,
+        command_sender: mpsc::Sender<PopupCommand>,
+        vertical_position: i32,
+    ) -> Self {
+        let window = ApplicationWindow::builder()
+            .application(app)
+            .decorated(false)
+            .resizable(false)
+            .build();
+
+        window.add_css_class(POPUP_WINDOW_CLASS);
+
+        window.init_layer_shell();
+        window.set_layer(Layer::Top);
+        window.set_anchor(Edge::Top, true);
+        window.set_anchor(Edge::Right, true);
+        window.set_anchor(Edge::Bottom, false);
+        window.set_anchor(Edge::Left, false);
+        window.set_margin_top(vertical_position);
+        window.set_namespace(Some("kaneru-notification-popup"));
+
+        if notification.urgency == Urgency::Critical {
+            window.add_css_class("critical");
+        }
+
+        let notification_id = notification.id;
+        let is_closing = Rc::new(RefCell::new(false));
+
+        let main_box = Box::builder().orientation(Orientation::Vertical).build();
+        main_box.add_css_class("notification-content-box");
+
+        let header_box = Box::builder().orientation(Orientation::Horizontal).build();
+        header_box.add_css_class("header");
+
+        let icon = if notification.app_icon.is_empty() {
+            Image::builder()
+                .icon_name("dialog-information-symbolic")
+                .build()
+        } else {
+            Image::builder().icon_name(&notification.app_icon).build()
+        };
+        icon.add_css_class("app-icon");
+        header_box.append(&icon);
+
+        let app_name_label = Label::builder()
+            .label(&notification.app_name)
+            .halign(Align::Start)
+            .hexpand(true)
+            .xalign(0.0)
+            .build();
+        app_name_label.add_css_class("app-name");
+        header_box.append(&app_name_label);
+
+        let close_button = Button::from_icon_name("window-close-symbolic");
+        close_button.add_css_class("close-button");
+        let sender_clone = command_sender.clone();
+        let id_clone = notification_id;
+        let is_closing_clone = is_closing.clone();
+        close_button.connect_clicked(move |_| {
+            if *is_closing_clone.borrow() {
+                return;
+            }
+            let sender = sender_clone.clone();
+            let id = id_clone;
+            glib::MainContext::default().spawn_local(async move {
+                if let Err(_e) = sender.send(PopupCommand::Close(id)).await {}
+            });
+        });
+        header_box.append(&close_button);
+
+        main_box.append(&header_box);
+
+        let content_box = Box::builder().orientation(Orientation::Vertical).build();
+        content_box.add_css_class("content");
+
+        let summary_label = Label::builder()
+            .label(&notification.summary)
+            .halign(Align::Start)
+            .xalign(0.0)
+            .wrap(true)
+            .justify(Justification::Left)
+            .build();
+        summary_label.add_css_class("summary");
+        content_box.append(&summary_label);
+
+        if !notification.body.is_empty() {
+            let body_label = Label::builder()
+                .label(&notification.body)
+                .halign(Align::Start)
+                .xalign(0.0)
+                .wrap(true)
+                .use_markup(true)
+                .justify(Justification::Left)
+                .build();
+            body_label.add_css_class("body");
+            content_box.append(&body_label);
+        }
+
+        if let Some(image_path) = &notification.image_path {
+            let file = gtk4::gio::File::for_path(image_path);
+            let cancellable: Option<&gtk4::gio::Cancellable> = None;
+
+            if file.query_exists(cancellable) {
+                let image_box = Box::new(Orientation::Horizontal, 0);
+                let image = Image::from_file(image_path);
+                image.add_css_class("image");
+                image_box.append(&image);
+                content_box.append(&image_box);
+            } else {
+            }
+        }
+
+        main_box.append(&content_box);
+
+        if !notification.actions.is_empty() {
+            let actions_box = Box::builder()
+                .orientation(Orientation::Horizontal)
+                .halign(Align::End)
+                .build();
+            actions_box.add_css_class("actions");
+
+            for chunk in notification.actions.chunks_exact(2) {
+                if chunk.len() == 2 {
+                    let key = chunk[0].to_string();
+                    let label = chunk[1].to_string();
+
+                    let action_button = Button::with_label(&label);
+                    action_button.add_css_class("action-button");
+                    let sender_for_action = command_sender.clone();
+                    let key_clone = key.clone();
+                    let id_clone = notification_id;
+                    let is_closing_clone_action = is_closing.clone();
+                    action_button.connect_clicked(move |_| {
+                        if *is_closing_clone_action.borrow() {
+                            return;
+                        }
+                        let sender = sender_for_action.clone();
+                        let key_for_send = key_clone.clone();
+                        let id = id_clone;
+                        glib::MainContext::default().spawn_local(async move {
+                            if let Err(_e) = sender
+                                .send(PopupCommand::ActionInvoked(id, key_for_send))
+                                .await
+                            {}
+                        });
+                    });
+                    actions_box.append(&action_button);
+                }
+            }
+            main_box.append(&actions_box);
+        }
+
+        let revealer = Revealer::builder()
+            .transition_type(RevealerTransitionType::SlideDown)
+            .transition_duration(250)
+            .child(&main_box)
+            .reveal_child(false)
+            .build();
+
+        window.set_child(Some(&revealer));
+
+        let window_clone_for_idle = window.clone();
+        glib::idle_add_local_once(move || {
+            if let Some(rev) = window_clone_for_idle
+                .child()
+                .and_then(|c| c.downcast::<Revealer>().ok())
+            {
+                rev.set_reveal_child(true);
+            }
+        });
+
+        let close_timer_source_id = Rc::new(RefCell::new(None));
+
+        let mut popup = Self {
+            window,
+            notification_id,
+            command_sender,
+            close_timer_source_id,
+            vertical_position,
+            is_closing,
+        };
+
+        popup.reset_close_timer(notification);
+
+        popup
+    }
+
+    pub fn window(&self) -> &ApplicationWindow {
+        &self.window
+    }
+
+    pub fn set_vertical_position(&mut self, position: i32) {
+        if self.vertical_position != position {
+            self.vertical_position = position;
+            self.window.set_margin_top(position);
+        }
+    }
+
+    pub fn close_popup(&mut self) {
+        if *self.is_closing.borrow() {
+            return;
+        }
+        *self.is_closing.borrow_mut() = true;
+
+        if let Some(source_id) = self.close_timer_source_id.borrow_mut().take() {
+            let _ = source_id.remove();
+        }
+
+        if let Some(revealer) = self
+            .window
+            .child()
+            .and_then(|w| w.downcast::<Revealer>().ok())
+        {
+            if revealer.reveals_child() {
+                revealer.set_reveal_child(false);
+                let window_clone = self.window.clone();
+                let transition_duration = revealer.transition_duration();
+                glib::timeout_add_local_once(
+                    Duration::from_millis(transition_duration as u64 + 50),
+                    move || {
+                        window_clone.destroy();
+                    },
+                );
+            } else {
+                self.window.destroy();
+            }
+        } else {
+            self.window.destroy();
+        }
+    }
+
+    fn reset_close_timer(&mut self, notification: &Notification) {
+        if let Some(source_id) = self.close_timer_source_id.borrow_mut().take() {
+            let _ = source_id.remove();
+        }
+
+        let timeout_ms = notification.expire_timeout;
+        let duration = match timeout_ms {
+            0 => None,
+            -1 => {
+                if notification.resident {
+                    None
+                } else {
+                    match notification.urgency {
+                        Urgency::Critical => Some(CRITICAL_TIMEOUT),
+                        _ => Some(DEFAULT_TIMEOUT),
+                    }
+                }
+            }
+            ms if ms > 0 => Some(Duration::from_millis(ms as u64)),
+            _ => Some(DEFAULT_TIMEOUT),
+        };
+
+        if let Some(d) = duration {
+            let sender = self.command_sender.clone();
+            let id = self.notification_id;
+            let timer_id_rc = self.close_timer_source_id.clone();
+            let is_closing_rc = self.is_closing.clone();
+
+            let source_id = glib::timeout_add_local_once(d, move || {
+                if *is_closing_rc.borrow() {
+                    return;
+                }
+                timer_id_rc.borrow_mut().take();
+                let sender_clone = sender.clone();
+                glib::MainContext::default().spawn_local(async move {
+                    if let Err(_e) = sender_clone.send(PopupCommand::Close(id)).await {}
+                });
+            });
+            *self.close_timer_source_id.borrow_mut() = Some(source_id);
+        }
+    }
+}
+
+impl Drop for NotificationPopup {
+    fn drop(&mut self) {
+        if let Some(source_id) = self.close_timer_source_id.borrow_mut().take() {
+            let _ = source_id.remove();
+        }
+    }
+}
