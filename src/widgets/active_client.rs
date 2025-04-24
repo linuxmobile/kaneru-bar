@@ -1,4 +1,5 @@
 use crate::utils::niri;
+use glib::clone;
 use gtk4::prelude::*;
 use gtk4::{Align, Box, Label, Orientation, Widget};
 use pango::EllipsizeMode;
@@ -8,6 +9,8 @@ const UPDATE_INTERVAL: Duration = Duration::from_secs(1);
 
 pub struct ActiveClientWidget {
     container: Box,
+    app_id_label: Label,
+    title_label: Label,
 }
 
 impl ActiveClientWidget {
@@ -35,47 +38,63 @@ impl ActiveClientWidget {
         container.append(&app_id_label);
         container.append(&title_label);
 
-        Self::update_widget_info(&container, &app_id_label, &title_label);
-        Self::schedule_update(container.clone(), app_id_label.clone(), title_label.clone());
+        let widget = Self {
+            container,
+            app_id_label,
+            title_label,
+        };
 
-        Self { container }
+        widget.update_widget_info();
+        widget.schedule_update();
+
+        widget
     }
 
-    fn update_widget_info(_container: &Box, app_id_label: &Label, title_label: &Label) {
+    fn update_widget_info(&self) {
         match niri::get_focused_window() {
             Ok(Some(window)) => {
-                app_id_label.set_text(&window.app_id.unwrap_or_default());
-                title_label.set_text(&window.title.unwrap_or_default());
+                self.app_id_label
+                    .set_text(&window.app_id.unwrap_or_default());
+                self.title_label.set_text(&window.title.unwrap_or_default());
+                self.container.set_visible(true);
             }
             Ok(None) => {
-                app_id_label.set_text("niri");
-                title_label.set_text("Desktop");
+                self.app_id_label.set_text("niri");
+                self.title_label.set_text("Desktop");
+                self.container.set_visible(true);
             }
             Err(e) => {
-                eprintln!("Failed to get focused window info: {}", e);
-                app_id_label.set_text("niri");
-                title_label.set_text("Error");
+                eprintln!("Failed to get focused window info: {:?}", e);
+                self.app_id_label.set_text("");
+                self.title_label.set_text("Error");
             }
         }
     }
 
-    fn schedule_update(container: Box, app_id_label: Label, title_label: Label) {
-        let container_weak = container.downgrade();
-        let app_id_label_weak = app_id_label.downgrade();
-        let title_label_weak = title_label.downgrade();
-
-        glib::timeout_add_local(UPDATE_INTERVAL, move || {
-            if let (Some(container), Some(app_id_label), Some(title_label)) = (
-                container_weak.upgrade(),
-                app_id_label_weak.upgrade(),
-                title_label_weak.upgrade(),
-            ) {
-                Self::update_widget_info(&container, &app_id_label, &title_label);
+    fn schedule_update(&self) {
+        glib::timeout_add_local(
+            UPDATE_INTERVAL,
+            clone!(@weak self.container as container, @weak self.app_id_label as app_id_label, @weak self.title_label as title_label => @default-return glib::ControlFlow::Break, move || {
+                match niri::get_focused_window() {
+                    Ok(Some(window)) => {
+                        app_id_label.set_text(&window.app_id.unwrap_or_default());
+                        title_label.set_text(&window.title.unwrap_or_default());
+                        container.set_visible(true);
+                    }
+                    Ok(None) => {
+                        app_id_label.set_text("niri");
+                        title_label.set_text("Desktop");
+                        container.set_visible(true);
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to get focused window info during update: {:?}", e);
+                        app_id_label.set_text("");
+                        title_label.set_text("Error");
+                    }
+                }
                 glib::ControlFlow::Continue
-            } else {
-                glib::ControlFlow::Break
-            }
-        });
+            }),
+        );
     }
 
     pub fn widget(&self) -> &impl IsA<Widget> {

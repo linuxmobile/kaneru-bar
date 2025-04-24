@@ -1,156 +1,164 @@
-use serde::de::DeserializeOwned;
-use serde::Deserialize;
-use std::collections::HashMap;
-use std::io;
-use std::process::{Command, Output};
-use std::string::FromUtf8Error;
+use niri_ipc::{self, Action, Reply, Request, Response};
+use std::{
+    collections::HashMap,
+    env,
+    io::{self, BufRead, BufReader, BufWriter, Write},
+    os::unix::net::UnixStream,
+    path::PathBuf,
+};
 use thiserror::Error;
+
+use niri_ipc::socket::SOCKET_PATH_ENV;
+
+pub use niri_ipc::{Output, Window, Workspace};
 
 #[derive(Error, Debug)]
 pub enum NiriError {
-    #[error("Failed to execute niri command: {0}")]
-    CommandIo(#[from] io::Error),
-    #[error("niri command failed with status: {status}\nStderr: {stderr}")]
-    CommandFailed { status: String, stderr: String },
-    #[error("Failed to decode command output (stdout) as UTF-8: {0}")]
-    OutputUtf8(#[from] FromUtf8Error),
-    #[error("Failed to decode command error output (stderr) as UTF-8: {0}")]
-    StderrUtf8(FromUtf8Error),
-    #[error("Failed to parse JSON output: {0}")]
-    JsonParse(#[from] serde_json::Error),
-    #[error("Niri returned unexpected or empty data for '{command}'")]
-    UnexpectedData { command: String },
+    #[error("Niri socket path environment variable ({SOCKET_PATH_ENV}) not set")]
+    SocketPathNotSet,
+    #[error("Failed to connect or clone niri socket: {0}")]
+    SocketConnection(io::Error),
+    #[error("Failed to send request to niri: {0}")]
+    RequestSend(io::Error),
+    #[error("Failed to read reply from niri: {0}")]
+    ReplyReceive(io::Error),
+    #[error("Failed to serialize request: {0}")]
+    RequestSerialization(serde_json::Error),
+    #[error("Failed to deserialize reply: {0}")]
+    ReplyDeserialization(serde_json::Error),
+    #[error("Niri returned an error reply: {0}")]
+    NiriErrorReply(String),
+    #[error("Niri returned an unexpected response type. Expected {expected}, got {got:?}")]
+    UnexpectedResponse { expected: String, got: Response },
+    #[error("Niri returned unexpected or empty data for request: {0:?}")]
+    UnexpectedData(Request),
 }
 
-#[derive(Debug, Clone, Deserialize, PartialEq)]
-pub struct Monitor {
-    pub name: String,
-    pub description: String,
-    pub width: i32,
-    pub height: i32,
-    pub refresh: i32,
-    pub scale: f64,
-    pub is_active: bool,
-    pub is_focused: bool,
-    pub workspaces: Vec<u32>,
+fn get_socket_path() -> Result<PathBuf, NiriError> {
+    env::var(SOCKET_PATH_ENV)
+        .map(PathBuf::from)
+        .map_err(|_| NiriError::SocketPathNotSet)
 }
 
-#[derive(Debug, Clone, Deserialize, PartialEq)]
-pub struct Workspace {
-    pub id: u64,
-    pub idx: u32,
-    pub output: String,
-    pub is_active: bool,
-    pub is_urgent: bool,
-}
+fn send_request<T>(
+    request: Request,
+    expected_response_fn: fn(Response) -> Option<T>,
+    expected_name: &str,
+) -> Result<T, NiriError> {
+    let socket_path = get_socket_path()?;
+    let stream = UnixStream::connect(&socket_path).map_err(NiriError::SocketConnection)?;
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Default)]
-pub struct Window {
-    pub id: u64,
-    #[serde(default)]
-    pub app_id: Option<String>,
-    #[serde(default)]
-    pub title: Option<String>,
-    #[serde(default)]
-    pub output: Option<String>,
-    #[serde(default)]
-    pub workspace: Option<u32>,
-    #[serde(default)]
-    pub is_focused: bool,
-    #[serde(default)]
-    pub is_fullscreen: bool,
-    #[serde(default)]
-    pub is_floating: bool,
-}
+    let reader_stream = stream.try_clone().map_err(NiriError::SocketConnection)?;
+    let writer_stream = stream;
 
-fn exec_niri_cmd(command: &str) -> Result<Output, NiriError> {
-    let output = Command::new("niri")
-        .args(["msg", "--json", command])
-        .output()?;
+    let mut reader = BufReader::new(reader_stream);
+    let mut writer = BufWriter::new(writer_stream);
 
-    if !output.status.success() {
-        let stderr = String::from_utf8(output.stderr).map_err(NiriError::StderrUtf8)?;
-        return Err(NiriError::CommandFailed {
-            status: output.status.to_string(),
-            stderr,
-        });
+    let request_json = serde_json::to_string(&request).map_err(NiriError::RequestSerialization)?;
+
+    writer
+        .write_all(request_json.as_bytes())
+        .and_then(|_| writer.write_all(b"\n"))
+        .and_then(|_| writer.flush())
+        .map_err(NiriError::RequestSend)?;
+
+    drop(writer);
+
+    let mut reply_json = String::new();
+    reader
+        .read_line(&mut reply_json)
+        .map_err(NiriError::ReplyReceive)?;
+
+    if reply_json.is_empty() {
+        return Err(NiriError::ReplyReceive(io::Error::new(
+            io::ErrorKind::UnexpectedEof,
+            "Niri socket closed before sending reply",
+        )));
     }
 
-    Ok(output)
-}
+    let reply: Reply =
+        serde_json::from_str(&reply_json).map_err(NiriError::ReplyDeserialization)?;
 
-fn exec_and_parse<T: DeserializeOwned>(command: &str) -> Result<T, NiriError> {
-    let output = exec_niri_cmd(command)?;
-    let stdout = String::from_utf8(output.stdout)?;
-    let stdout_trimmed = stdout.trim();
-
-    if stdout_trimmed.is_empty() {
-        return Err(NiriError::UnexpectedData {
-            command: command.to_string(),
-        });
+    match reply {
+        Ok(response) => {
+            if let Some(data) = expected_response_fn(response.clone()) {
+                Ok(data)
+            } else {
+                Err(NiriError::UnexpectedResponse {
+                    expected: expected_name.to_string(),
+                    got: response,
+                })
+            }
+        }
+        Err(e) => Err(NiriError::NiriErrorReply(e)),
     }
-
-    serde_json::from_str(stdout_trimmed).map_err(|e| {
-        eprintln!(
-            "JSON parsing failed for command '{}'. Input: '{}'",
-            command, stdout_trimmed
-        );
-        NiriError::JsonParse(e)
-    })
 }
 
-pub fn get_monitors() -> Result<HashMap<String, Monitor>, NiriError> {
-    exec_and_parse("outputs")
+pub fn get_outputs() -> Result<HashMap<String, Output>, NiriError> {
+    send_request(
+        Request::Outputs,
+        |resp| match resp {
+            Response::Outputs(outputs) => Some(outputs),
+            _ => None,
+        },
+        "Outputs",
+    )
 }
 
 pub fn get_workspaces() -> Result<Vec<Workspace>, NiriError> {
-    exec_and_parse("workspaces")
+    send_request(
+        Request::Workspaces,
+        |resp| match resp {
+            Response::Workspaces(workspaces) => Some(workspaces),
+            _ => None,
+        },
+        "Workspaces",
+    )
 }
 
 pub fn get_focused_window() -> Result<Option<Window>, NiriError> {
-    match exec_and_parse::<Option<Window>>("focused-window") {
-        Ok(window_option) => Ok(window_option),
-        Err(NiriError::UnexpectedData { command }) if command == "focused-window" => Ok(None),
-        Err(e @ NiriError::JsonParse(_)) => {
-            eprintln!(
-                "Warning: Niri returned malformed JSON for focused-window, treating as none: {}",
-                e
-            );
-            Ok(None)
-        }
-        Err(e) => Err(e),
-    }
+    send_request(
+        Request::FocusedWindow,
+        |resp| match resp {
+            Response::FocusedWindow(window_option) => Some(window_option),
+            _ => None,
+        },
+        "FocusedWindow",
+    )
 }
 
 pub fn get_all_windows() -> Result<Vec<Window>, NiriError> {
-    exec_and_parse("windows")
+    send_request(
+        Request::Windows,
+        |resp| match resp {
+            Response::Windows(windows) => Some(windows),
+            _ => None,
+        },
+        "Windows",
+    )
 }
 
-pub fn perform_action(action: &str, args: &[&str]) -> Result<(), NiriError> {
-    let mut command_args = vec!["msg", "action", action];
-    command_args.extend_from_slice(args);
-
-    let output = Command::new("niri").args(&command_args).output()?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8(output.stderr).map_err(NiriError::StderrUtf8)?;
-        Err(NiriError::CommandFailed {
-            status: output.status.to_string(),
-            stderr,
-        })
-    } else {
-        Ok(())
-    }
-}
-
-pub fn get_workspaces_by_monitor() -> Result<HashMap<String, Vec<Workspace>>, NiriError> {
+pub fn get_workspaces_by_output() -> Result<HashMap<String, Vec<Workspace>>, NiriError> {
     let workspaces = get_workspaces()?;
     let mut grouped: HashMap<String, Vec<Workspace>> = HashMap::new();
     for ws in workspaces {
-        grouped.entry(ws.output.clone()).or_default().push(ws);
+        if let Some(output_name) = ws.output.clone() {
+            grouped.entry(output_name).or_default().push(ws);
+        }
     }
     for ws_list in grouped.values_mut() {
         ws_list.sort_by_key(|ws| ws.idx);
     }
     Ok(grouped)
+}
+
+pub fn perform_action(action: Action) -> Result<(), NiriError> {
+    send_request(
+        Request::Action(action),
+        |resp| match resp {
+            Response::Handled => Some(()),
+            _ => None,
+        },
+        "Handled (for Action)",
+    )
 }

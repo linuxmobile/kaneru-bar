@@ -515,6 +515,7 @@ dependencies = [
  "glib-build-tools",
  "gtk4",
  "gtk4-layer-shell",
+ "niri-ipc",
  "pango",
  "serde",
  "serde_json",
@@ -563,6 +564,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "niri-ipc"
+version = "25.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "01515d0a7e73f1f3bd0347100542c4c3f6ebc280688add12e7ed2af4c35af4fb"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
