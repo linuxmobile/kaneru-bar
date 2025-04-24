@@ -1,46 +1,42 @@
-use anyhow::{Context, Result};
-use std::sync::Once;
-
-include!(concat!(env!("OUT_DIR"), "/compiled_resources.rs"));
+use crate::generated;
+use std::{error::Error, sync::OnceLock};
 
 const CSS_RESOURCE_PATH: &str = "/com/github/linuxmobile/kaneru/style.css";
 
-static RESOURCES_LOADED: Once = Once::new();
+static RESOURCE_REGISTRATION_RESULT: OnceLock<Result<(), String>> = OnceLock::new();
 
-fn load_resources() -> Result<()> {
-    let mut registration_result = Ok(());
-
-    RESOURCES_LOADED.call_once(|| {
+fn load_resources_once() -> Result<(), String> {
+    RESOURCE_REGISTRATION_RESULT.get_or_init(|| {
         println!("Loading GResource data from embedded bytes...");
-        let resource_data = glib::Bytes::from_static(RESOURCE_BYTES);
+        let resource_data = glib::Bytes::from_static(generated::RESOURCE_BYTES);
         match gio::Resource::from_data(&resource_data) {
             Ok(res) => {
                 gio::resources_register(&res);
                 println!("GResource registered successfully from embedded bytes.");
                 if gio::resources_lookup_data(CSS_RESOURCE_PATH, gio::ResourceLookupFlags::NONE).is_err() {
-                     eprintln!(
+                     let err_msg = format!(
                         "CRITICAL ERROR: CSS resource NOT found at path '{}' after registering embedded resource.",
                         CSS_RESOURCE_PATH
                     );
-                    registration_result = Err(anyhow::anyhow!(
-                        "CSS resource '{}' not found after registration", CSS_RESOURCE_PATH
-                    ));
+                    eprintln!("{}", err_msg);
+                    Err(err_msg)
                 } else {
                     println!("SUCCESS: CSS resource found at path: {}", CSS_RESOURCE_PATH);
+                    Ok(())
                 }
             }
             Err(e) => {
-                eprintln!("CRITICAL: Failed to load GResource bundle from embedded data: {}", e);
-                registration_result = Err(anyhow::anyhow!("Failed to load GResource from data").context(e));
+                let err_msg = format!("CRITICAL: Failed to load GResource bundle from embedded data: {}", e);
+                eprintln!("{}", err_msg);
+                Err(err_msg)
             }
         }
-    });
-
-    registration_result
+    }).clone()
 }
 
-pub fn load_css_from_resource() -> Result<gtk4::CssProvider> {
-    load_resources().context("Failed to load/register embedded GResource")?;
+pub fn load_css_from_resource() -> Result<gtk4::CssProvider, Box<dyn Error>> {
+    load_resources_once()
+        .map_err(|e| format!("Failed to load/register embedded GResource: {}", e))?;
 
     let provider = gtk4::CssProvider::new();
     println!(
@@ -79,7 +75,7 @@ pub fn apply_css() {
         Err(e) => {
             eprintln!("######################################################");
             eprintln!("# Critical Error: Failed to load/apply CSS:          #");
-            eprintln!("# {:#?}", e);
+            eprintln!("# {}", e);
             eprintln!("######################################################");
         }
     }

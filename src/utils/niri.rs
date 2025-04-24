@@ -2,34 +2,76 @@ use niri_ipc::{self, Action, Reply, Request, Response};
 use std::{
     collections::HashMap,
     env,
+    error::Error,
+    fmt,
     io::{self, BufRead, BufReader, BufWriter, Write},
     os::unix::net::UnixStream,
     path::PathBuf,
 };
-use thiserror::Error;
 
 use niri_ipc::socket::SOCKET_PATH_ENV;
 
 pub use niri_ipc::{Output, Window, Workspace};
 
-#[derive(Error, Debug)]
+#[derive(Debug)]
 pub enum NiriError {
-    #[error("Niri socket path environment variable ({SOCKET_PATH_ENV}) not set")]
     SocketPathNotSet,
-    #[error("Failed to connect or clone niri socket: {0}")]
     SocketConnection(io::Error),
-    #[error("Failed to send request to niri: {0}")]
     RequestSend(io::Error),
-    #[error("Failed to read reply from niri: {0}")]
     ReplyReceive(io::Error),
-    #[error("Failed to serialize request: {0}")]
     RequestSerialization(serde_json::Error),
-    #[error("Failed to deserialize reply: {0}")]
     ReplyDeserialization(serde_json::Error),
-    #[error("Niri returned an error reply: {0}")]
     NiriErrorReply(String),
-    #[error("Niri returned an unexpected response type. Expected {expected}, got {got:?}")]
     UnexpectedResponse { expected: String, got: Response },
+}
+
+impl fmt::Display for NiriError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            NiriError::SocketPathNotSet => write!(
+                f,
+                "Niri socket path environment variable ({}) not set",
+                SOCKET_PATH_ENV
+            ),
+            NiriError::SocketConnection(e) => {
+                write!(f, "Failed to connect or clone niri socket: {}", e)
+            }
+            NiriError::RequestSend(e) => write!(f, "Failed to send request to niri: {}", e),
+            NiriError::ReplyReceive(e) => write!(f, "Failed to read reply from niri: {}", e),
+            NiriError::RequestSerialization(e) => write!(f, "Failed to serialize request: {}", e),
+            NiriError::ReplyDeserialization(e) => write!(f, "Failed to deserialize reply: {}", e),
+            NiriError::NiriErrorReply(s) => write!(f, "Niri returned an error reply: {}", s),
+            NiriError::UnexpectedResponse { expected, got } => write!(
+                f,
+                "Niri returned an unexpected response type. Expected {}, got {:?}",
+                expected, got
+            ),
+        }
+    }
+}
+
+impl Error for NiriError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            NiriError::SocketConnection(e) => Some(e),
+            NiriError::RequestSend(e) => Some(e),
+            NiriError::ReplyReceive(e) => Some(e),
+            NiriError::RequestSerialization(e) => Some(e),
+            NiriError::ReplyDeserialization(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+impl From<io::Error> for NiriError {
+    fn from(err: io::Error) -> Self {
+        NiriError::ReplyReceive(err)
+    }
+}
+impl From<serde_json::Error> for NiriError {
+    fn from(err: serde_json::Error) -> Self {
+        NiriError::ReplyDeserialization(err)
+    }
 }
 
 fn get_socket_path() -> Result<PathBuf, NiriError> {
@@ -92,6 +134,7 @@ fn send_request<T>(
     }
 }
 
+#[allow(dead_code)]
 fn get_outputs() -> Result<HashMap<String, Output>, NiriError> {
     send_request(
         Request::Outputs,
@@ -103,6 +146,7 @@ fn get_outputs() -> Result<HashMap<String, Output>, NiriError> {
     )
 }
 
+#[allow(dead_code)]
 fn get_workspaces() -> Result<Vec<Workspace>, NiriError> {
     send_request(
         Request::Workspaces,
@@ -115,6 +159,7 @@ fn get_workspaces() -> Result<Vec<Workspace>, NiriError> {
 }
 
 pub fn get_focused_window() -> Result<Option<Window>, NiriError> {
+    // Added pub
     send_request(
         Request::FocusedWindow,
         |resp| match resp {
@@ -125,6 +170,7 @@ pub fn get_focused_window() -> Result<Option<Window>, NiriError> {
     )
 }
 
+#[allow(dead_code)]
 fn get_all_windows() -> Result<Vec<Window>, NiriError> {
     send_request(
         Request::Windows,
@@ -136,6 +182,7 @@ fn get_all_windows() -> Result<Vec<Window>, NiriError> {
     )
 }
 
+#[allow(dead_code)]
 fn get_workspaces_by_output() -> Result<HashMap<String, Vec<Workspace>>, NiriError> {
     let workspaces = get_workspaces()?;
     let mut grouped: HashMap<String, Vec<Workspace>> = HashMap::new();
@@ -150,6 +197,7 @@ fn get_workspaces_by_output() -> Result<HashMap<String, Vec<Workspace>>, NiriErr
     Ok(grouped)
 }
 
+#[allow(dead_code)]
 fn perform_action(action: Action) -> Result<(), NiriError> {
     send_request(
         Request::Action(action),

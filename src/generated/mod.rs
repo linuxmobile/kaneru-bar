@@ -1,4 +1,1 @@
-#[path = "kaneru_gresource.rs"]
-pub mod kaneru_gresource;
-
-pub use kaneru_gresource::kaneru_gresource_register_resources;
+include!(concat!(env!("OUT_DIR"), "/compiled_resources.rs"));

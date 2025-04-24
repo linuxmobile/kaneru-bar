@@ -1,6 +1,5 @@
-use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use std::{fs, path::PathBuf};
+use std::{error::Error, fs, path::PathBuf};
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Hash)]
 #[serde(rename_all = "kebab-case")]
@@ -31,14 +30,14 @@ impl Default for BarConfig {
     }
 }
 
-fn get_config_path() -> Result<PathBuf> {
-    let mut path = dirs::config_dir().context("Could not determine config directory")?;
+fn get_config_path() -> Result<PathBuf, Box<dyn Error>> {
+    let mut path = dirs::config_dir().ok_or("Could not determine config directory")?;
     path.push("kaneru");
     path.push("config.yaml");
     Ok(path)
 }
 
-fn ensure_config_exists() -> Result<()> {
+fn ensure_config_exists() -> Result<(), Box<dyn Error>> {
     let config_path = get_config_path()?;
 
     if !config_path.exists() {
@@ -48,15 +47,15 @@ fn ensure_config_exists() -> Result<()> {
         );
         let config_dir = config_path
             .parent()
-            .context("Config path has no parent directory")?;
+            .ok_or("Config path has no parent directory")?;
         fs::create_dir_all(config_dir)
-            .with_context(|| format!("Failed to create config directory {:?}", config_dir))?;
+            .map_err(|e| format!("Failed to create config directory {:?}: {}", config_dir, e))?;
 
         let default_config = BarConfig::default();
         let yaml_string = serde_yaml::to_string(&default_config)
-            .context("Failed to serialize default config to YAML")?;
+            .map_err(|e| format!("Failed to serialize default config to YAML: {}", e))?;
         fs::write(&config_path, yaml_string)
-            .with_context(|| format!("Failed to write default config to {:?}", config_path))?;
+            .map_err(|e| format!("Failed to write default config to {:?}: {}", config_path, e))?;
         println!("Default config written successfully.");
     }
 
@@ -70,19 +69,23 @@ pub fn load_config() -> BarConfig {
             config
         }
         Err(e) => {
-            eprintln!("Failed to load or create config: {:?}. Using default.", e);
+            eprintln!("Failed to load or create config: {}. Using default.", e);
             BarConfig::default()
         }
     }
 }
 
-fn load_config_internal() -> Result<BarConfig> {
+fn load_config_internal() -> Result<BarConfig, Box<dyn Error>> {
     ensure_config_exists()?;
     let config_path = get_config_path()?;
     println!("Loading config from: {:?}", config_path);
     let contents = fs::read_to_string(&config_path)
-        .with_context(|| format!("Failed to read config file: {:?}", config_path))?;
-    let config: BarConfig = serde_yaml::from_str(&contents)
-        .with_context(|| format!("Failed to parse YAML from config file: {:?}", config_path))?;
+        .map_err(|e| format!("Failed to read config file: {:?}: {}", config_path, e))?;
+    let config: BarConfig = serde_yaml::from_str(&contents).map_err(|e| {
+        format!(
+            "Failed to parse YAML from config file: {:?}: {}",
+            config_path, e
+        )
+    })?;
     Ok(config)
 }

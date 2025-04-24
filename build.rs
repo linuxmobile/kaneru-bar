@@ -54,7 +54,7 @@ fn main() -> Result<()> {
         out_dir.display()
     );
 
-    let status = Command::new("glib-compile-resources")
+    let glib_compile_status = Command::new("glib-compile-resources")
         .arg("--target")
         .arg(&gresource_output_bundle)
         .arg("--sourcedir")
@@ -63,10 +63,10 @@ fn main() -> Result<()> {
         .status()
         .context("Failed to execute glib-compile-resources command")?;
 
-    if !status.success() {
+    if !glib_compile_status.success() {
         anyhow::bail!(
             "glib-compile-resources command failed with status: {}. Check XML and source paths.",
-            status
+            glib_compile_status
         );
     }
 
@@ -76,33 +76,47 @@ fn main() -> Result<()> {
             gresource_output_bundle.display()
         );
     }
-
     println!(
         "Compiled GResource bundle successfully to {}",
         gresource_output_bundle.display()
     );
 
     let generated_rust_path = out_dir.join("compiled_resources.rs");
-    let resource_bundle_relative_path = gresource_output_bundle
-        .file_name()
-        .context("Failed to get filename for resource bundle")?
-        .to_str()
-        .context("Resource bundle filename is not valid UTF-8")?;
 
-    let rust_code = format!(
-        "pub const RESOURCE_BYTES: &[u8] = include_bytes!(\"{}\");\n",
-        resource_bundle_relative_path
-    );
+    let bytes = fs::read(&gresource_output_bundle).with_context(|| {
+        format!(
+            "Failed to read generated resource bundle: {}",
+            gresource_output_bundle.display()
+        )
+    })?;
 
-    fs::write(&generated_rust_path, rust_code).with_context(|| {
+    let mut rust_code = String::from("pub const RESOURCE_BYTES: &[u8] = &[\n    ");
+    for (i, byte) in bytes.iter().enumerate() {
+        rust_code.push_str(&format!("0x{:02x},", byte));
+        if (i + 1) % 12 == 0 {
+            rust_code.push_str("\n    ");
+        } else {
+            rust_code.push(' ');
+        }
+    }
+    rust_code.push_str("\n];\n");
+
+    fs::write(&generated_rust_path, &rust_code).with_context(|| {
         format!(
             "Failed to write generated Rust code to {:?}",
             generated_rust_path
         )
     })?;
 
+    if !generated_rust_path.exists() {
+        anyhow::bail!(
+            "Failed to confirm existence of {} after writing!",
+            generated_rust_path.display()
+        );
+    }
+
     println!(
-        "Generated Rust resource loader at: {}",
+        "Generated Rust resource loader (byte array) at: {}",
         generated_rust_path.display()
     );
 

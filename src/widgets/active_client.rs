@@ -91,6 +91,7 @@ impl ActiveClientWidget {
                         eprintln!("Failed to get focused window info during update: {:?}", e);
                         app_id_label.set_text("");
                         title_label.set_text("Error");
+                        container.set_visible(false);
                     }
                 }
                 glib::ControlFlow::Continue
