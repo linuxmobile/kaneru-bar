@@ -6,12 +6,15 @@
   .app-menu-container {
     background-color: $surface0;
     border-radius: to-rem(16px);
-    border: to-rem(1px) solid gtkalpha($border, 0.2);
     min-width: to-rem(300px);
+    padding: to-rem(10px) to-rem(16px) 0 to-rem(16px);
   }
 
   .app-menu-search {
     margin-bottom: to-rem(8px);
+    border: none;
+    outline: none;
+    background-color: $surface1;
   }
 
   .app-menu-scroll {
@@ -31,18 +34,11 @@
 
   .app-menu-item {
     background-color: transparent;
-    border-radius: to-rem(12px);
-    border: none;
-    padding: 0;
-    margin: to-rem(2px) 0;
+    border-radius: to-rem(16px);
     transition: background-color 200ms ease;
 
     &:hover {
       background-color: gtkalpha($surface1, 0.6);
-    }
-
-    .app-menu-item-box {
-      padding: to-rem(6px) to-rem(8px);
     }
 
     .app-menu-item-icon {

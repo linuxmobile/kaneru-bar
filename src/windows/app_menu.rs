@@ -18,10 +18,6 @@ impl AppMenu {
         popover.add_css_class("AppMenuPopover");
 
         let container = Box::new(Orientation::Vertical, 6);
-        container.set_margin_start(12);
-        container.set_margin_end(12);
-        container.set_margin_top(12);
-        container.set_margin_bottom(12);
         container.add_css_class("app-menu-container");
 
         let search_entry = SearchEntry::new();
@@ -81,10 +77,6 @@ impl AppMenu {
 
     fn create_app_row(name: &str, icon: &Option<gio::Icon>, exec: &str) -> Button {
         let row = Box::new(Orientation::Horizontal, 12);
-        row.set_margin_start(6);
-        row.set_margin_end(6);
-        row.set_margin_top(6);
-        row.set_margin_bottom(6);
         row.add_css_class("app-menu-item-box");
 
         let image = match icon {
