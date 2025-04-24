@@ -30,8 +30,6 @@ pub enum NiriError {
     NiriErrorReply(String),
     #[error("Niri returned an unexpected response type. Expected {expected}, got {got:?}")]
     UnexpectedResponse { expected: String, got: Response },
-    #[error("Niri returned unexpected or empty data for request: {0:?}")]
-    UnexpectedData(Request),
 }
 
 fn get_socket_path() -> Result<PathBuf, NiriError> {
@@ -94,7 +92,7 @@ fn send_request<T>(
     }
 }
 
-pub fn get_outputs() -> Result<HashMap<String, Output>, NiriError> {
+fn get_outputs() -> Result<HashMap<String, Output>, NiriError> {
     send_request(
         Request::Outputs,
         |resp| match resp {
@@ -105,7 +103,7 @@ pub fn get_outputs() -> Result<HashMap<String, Output>, NiriError> {
     )
 }
 
-pub fn get_workspaces() -> Result<Vec<Workspace>, NiriError> {
+fn get_workspaces() -> Result<Vec<Workspace>, NiriError> {
     send_request(
         Request::Workspaces,
         |resp| match resp {
@@ -127,7 +125,7 @@ pub fn get_focused_window() -> Result<Option<Window>, NiriError> {
     )
 }
 
-pub fn get_all_windows() -> Result<Vec<Window>, NiriError> {
+fn get_all_windows() -> Result<Vec<Window>, NiriError> {
     send_request(
         Request::Windows,
         |resp| match resp {
@@ -138,7 +136,7 @@ pub fn get_all_windows() -> Result<Vec<Window>, NiriError> {
     )
 }
 
-pub fn get_workspaces_by_output() -> Result<HashMap<String, Vec<Workspace>>, NiriError> {
+fn get_workspaces_by_output() -> Result<HashMap<String, Vec<Workspace>>, NiriError> {
     let workspaces = get_workspaces()?;
     let mut grouped: HashMap<String, Vec<Workspace>> = HashMap::new();
     for ws in workspaces {
@@ -152,7 +150,7 @@ pub fn get_workspaces_by_output() -> Result<HashMap<String, Vec<Workspace>>, Nir
     Ok(grouped)
 }
 
-pub fn perform_action(action: Action) -> Result<(), NiriError> {
+fn perform_action(action: Action) -> Result<(), NiriError> {
     send_request(
         Request::Action(action),
         |resp| match resp {

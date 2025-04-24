@@ -1,5 +1,5 @@
 use crate::utils::niri;
-use glib::clone;
+use glib;
 use gtk4::prelude::*;
 use gtk4::{Align, Box, Label, Orientation, Widget};
 use pango::EllipsizeMode;
@@ -67,6 +67,7 @@ impl ActiveClientWidget {
                 eprintln!("Failed to get focused window info: {:?}", e);
                 self.app_id_label.set_text("");
                 self.title_label.set_text("Error");
+                self.container.set_visible(false);
             }
         }
     }
@@ -74,7 +75,7 @@ impl ActiveClientWidget {
     fn schedule_update(&self) {
         glib::timeout_add_local(
             UPDATE_INTERVAL,
-            clone!(@weak self.container as container, @weak self.app_id_label as app_id_label, @weak self.title_label as title_label => @default-return glib::ControlFlow::Break, move || {
+            glib::clone!(@weak self.container as container, @weak self.app_id_label as app_id_label, @weak self.title_label as title_label => @default-return glib::ControlFlow::Break, move || {
                 match niri::get_focused_window() {
                     Ok(Some(window)) => {
                         app_id_label.set_text(&window.app_id.unwrap_or_default());
