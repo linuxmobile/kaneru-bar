@@ -1,0 +1,25 @@
+@use "../abstracts" as *;
+
+@mixin button {
+  padding: to-rem(4px) to-rem(16px);
+  border-radius: to-rem(50px);
+  background-color: gtkalpha($surface1, 0.6);
+  color: $text;
+  transition: all 200ms ease;
+  border: none;
+  margin: 0 to-rem(4px);
+
+  &:hover {
+    background-color: gtkalpha($surface2, 0.8);
+  }
+
+  icon {
+    font-size: to-rem(16px);
+    color: inherit;
+  }
+
+  label {
+    color: inherit;
+    font-size: to-rem(14px);
+  }
+}

@@ -1,0 +1,95 @@
+@use "../abstracts" as *;
+@use "sass:color";
+
+window.SysInfoWindow {
+  background: transparent;
+
+  > box {
+    background-color: $surface0;
+    border-radius: to-rem(24px);
+    border: to-rem(1px) solid gtkalpha($border, 0.2);
+    min-width: to-rem(400px);
+    margin: to-rem(12px) to-rem(10px);
+
+    > box:first-child {
+      background-color: gtkalpha($surface1, 0.5);
+      border-radius: to-rem(20px);
+      margin-bottom: to-rem(16px);
+
+      > box:first-child {
+        padding: to-rem(16px);
+
+        > box {
+          .distro-logo {
+            font-size: to-rem(64px);
+            color: $overlay2;
+            margin-right: to-rem(16px);
+          }
+
+          > box {
+            .distro-name {
+              font-size: to-rem(24px);
+              font-weight: 600;
+              color: $text;
+            }
+
+            .distro-version {
+              font-size: to-rem(14px);
+              font-weight: 500;
+              color: $overlay2;
+            }
+
+            .distro-codename {
+              font-size: to-rem(13px);
+              color: $subtext1;
+            }
+          }
+        }
+      }
+
+      > box:last-child {
+        padding: to-rem(16px);
+        border-left: to-rem(1px) solid gtkalpha($border, 0.1);
+
+        .info-label {
+          color: $overlay2;
+          font-size: to-rem(14px);
+        }
+
+        .info-value {
+          color: $text;
+          font-size: to-rem(14px);
+          font-weight: 500;
+        }
+      }
+    }
+
+    > box:last-child {
+      background-color: gtkalpha($surface1, 0.5);
+      border-radius: to-rem(20px);
+      padding: to-rem(16px);
+      margin-bottom: to-rem(16px);
+
+      box {
+        padding: to-rem(8px) 0;
+        border-bottom: to-rem(1px) solid gtkalpha($border, 0.1);
+
+        &:last-child {
+          border-bottom: none;
+        }
+
+        .info-label {
+          color: $overlay2;
+          font-size: to-rem(14px);
+          min-width: to-rem(80px);
+        }
+
+        .info-value {
+          color: $text;
+          font-size: to-rem(14px);
+          font-weight: 500;
+        }
+      }
+    }
+  }
+}

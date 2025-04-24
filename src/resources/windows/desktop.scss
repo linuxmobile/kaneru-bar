@@ -1,0 +1,12 @@
+@use "../abstracts" as *;
+
+window.DesktopFrame {
+  background: transparent;
+
+  .desktop-frame {
+    background-color: transparent;
+    box-shadow: 0 0 0 to-rem(40px) $surface0;
+    margin: to-rem(10px);
+    border-radius: to-rem(30px);
+  }
+}

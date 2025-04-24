@@ -1,0 +1,34 @@
+@use "../abstracts" as *;
+@use "../components/button" as *;
+
+.Vitals {
+  @include button;
+
+  box {
+    margin: 4px;
+  }
+
+  .cpu {
+    icon {
+      color: $overlay2;
+    }
+  }
+
+  .memory {
+    icon {
+      color: $green;
+    }
+  }
+
+  .disk {
+    icon {
+      color: $yellow;
+    }
+  }
+
+  .temperature {
+    icon {
+      color: $red;
+    }
+  }
+}

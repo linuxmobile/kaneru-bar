@@ -1,0 +1,241 @@
+@use "../abstracts" as *;
+@use "../components/button" as *;
+
+window.NetworkWindow {
+  background: transparent;
+
+  > box {
+    background-color: $surface0;
+    border-radius: to-rem(24px);
+    border: to-rem(1px) solid gtkalpha($border, 0.2);
+    min-width: to-rem(350px);
+    margin: to-rem(12px) to-rem(90px);
+
+    .quick-settings-row {
+      margin: to-rem(5px) 0 to-rem(15px);
+
+      .quick-toggle {
+        border-radius: to-rem(16px);
+        background-color: gtkalpha($surface1, 0.5);
+        padding: to-rem(8px) to-rem(5px);
+        margin-right: to-rem(8px);
+        border: to-rem(1px) solid transparent;
+        min-width: to-rem(80px);
+        transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+
+        &:hover {
+          background-color: gtkalpha($surface2, 0.5);
+          border-color: gtkalpha($border, 0.15);
+        }
+
+        &.active {
+          background-color: gtkalpha($overlay2, 0.15);
+          border-color: gtkalpha($overlay2, 0.3);
+
+          icon {
+            color: $overlay2;
+          }
+
+          label {
+            color: $overlay2;
+          }
+        }
+
+        box {
+          min-width: to-rem(80px);
+
+          icon {
+            font-size: to-rem(20px);
+            margin: to-rem(3px) 0;
+            color: $text;
+          }
+
+          label {
+            font-size: to-rem(12px);
+            font-weight: 500;
+            color: $text;
+          }
+        }
+      }
+    }
+
+    .current-network {
+      background-color: gtkalpha($surface1, 0.5);
+      border-radius: to-rem(20px);
+      padding: to-rem(16px);
+      margin: to-rem(8px) 0 to-rem(16px);
+
+      > box:first-child {
+        margin-bottom: to-rem(10px);
+
+        icon {
+          font-size: to-rem(24px);
+          color: $overlay2;
+        }
+
+        label {
+          font-size: 1.1em;
+          font-weight: 600;
+          color: $text;
+        }
+      }
+
+      .network-details {
+        box {
+          margin: to-rem(6px) 0;
+
+          label {
+            &:nth-child(1) {
+              color: $subtext1;
+              font-size: to-rem(13px);
+            }
+
+            &:nth-child(2) {
+              color: $text;
+              font-size: to-rem(13px);
+              font-weight: 500;
+            }
+          }
+        }
+      }
+    }
+
+    .section-header {
+      margin: to-rem(4px) 0;
+
+      label {
+        font-size: to-rem(16px);
+        font-weight: 600;
+        color: $text;
+      }
+    }
+
+    .networks-section {
+      .networks-container {
+        background-color: gtkalpha($surface1, 0.5);
+        border-radius: to-rem(20px);
+        padding: to-rem(10px);
+
+        .network-selector {
+          padding: to-rem(10px);
+          border-radius: to-rem(16px);
+          background-color: transparent;
+          transition: all 200ms ease;
+          margin-bottom: to-rem(4px);
+          border: to-rem(1px) solid transparent;
+
+          &:hover {
+            background-color: gtkalpha($surface2, 0.5);
+          }
+
+          box {
+            icon:first-child {
+              font-size: to-rem(18px);
+              color: $overlay2;
+              margin-right: to-rem(12px);
+            }
+
+            label {
+              font-weight: 500;
+              font-size: to-rem(14px);
+            }
+          }
+
+          icon:last-child {
+            transition: all 250ms cubic-bezier(0.4, 0, 0.2, 1);
+            -gtk-icon-transform: rotate(-90deg);
+            opacity: 0.7;
+
+            &.expanded {
+              -gtk-icon-transform: rotate(0deg);
+              opacity: 1;
+            }
+          }
+        }
+
+        .networks-list-container {
+          padding: to-rem(5px);
+
+          .network-list {
+            min-height: to-rem(200px);
+
+            &,
+            scrolledwindow {
+              border: none;
+              outline: none;
+              box-shadow: none;
+            }
+
+            viewport {
+              border: none;
+              outline: none;
+            }
+
+            button {
+              padding: to-rem(12px) to-rem(10px);
+              border-radius: to-rem(12px);
+              background-color: transparent;
+              transition: all 200ms ease;
+              margin: to-rem(2px) 0;
+              border: to-rem(1px) solid transparent;
+
+              &:hover {
+                background-color: gtkalpha($surface2, 0.5);
+              }
+
+              &.active {
+                background-color: gtkalpha($overlay2, 0.15);
+                border: to-rem(1px) solid gtkalpha($overlay2, 0.3);
+
+                icon {
+                  color: $overlay2;
+                }
+              }
+
+              box {
+                icon {
+                  font-size: to-rem(18px);
+                  color: $overlay2;
+                  opacity: 0.8;
+                }
+
+                label:nth-child(2) {
+                  color: $text;
+                  font-weight: 500;
+                  margin-left: to-rem(8px);
+                }
+
+                label:nth-child(3) {
+                  color: $overlay2;
+                  font-size: to-rem(13px);
+                  font-weight: 500;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    .settings {
+      margin-top: to-rem(12px);
+
+      button {
+        @include button;
+        padding: to-rem(12px);
+        background-color: $overlay2;
+        border-radius: to-rem(20px);
+        font-weight: 500;
+        font-size: to-rem(14px);
+        color: $base;
+        border: none;
+        transition: all 200ms ease;
+
+        &:hover {
+          background-color: gtkalpha($overlay2, 0.8);
+          box-shadow: 0 to-rem(2px) to-rem(4px) gtkalpha(black, 0.2);
+        }
+      }
+    }
+  }
+}

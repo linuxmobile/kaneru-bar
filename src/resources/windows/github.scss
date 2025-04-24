@@ -1,0 +1,142 @@
+@use "../abstracts" as *;
+
+window.GithubWindow {
+  background: transparent;
+
+  > box {
+    background-color: $surface0;
+    border-radius: to-rem(24px);
+    border: to-rem(1px) solid gtkalpha($border, 0.2);
+    min-width: to-rem(360px);
+    margin: to-rem(12px) to-rem(198px);
+    padding: to-rem(20px);
+
+    .header {
+      padding: to-rem(4px) 0;
+      margin-bottom: to-rem(16px);
+
+      icon {
+        font-size: to-rem(24px);
+        color: $overlay2;
+      }
+
+      label {
+        color: $text;
+        font-size: to-rem(18px);
+        font-weight: 600;
+        margin-left: to-rem(4px);
+      }
+    }
+
+    .update-bar {
+      background-color: gtkalpha($surface1, 0.5);
+      border-radius: to-rem(20px);
+      padding: to-rem(12px) to-rem(16px);
+      margin-bottom: to-rem(16px);
+      border: to-rem(1px) solid transparent;
+
+      label {
+        color: $overlay2;
+        font-size: to-rem(13px);
+        font-weight: 500;
+      }
+
+      .refresh-button {
+        background-color: transparent;
+        padding: to-rem(6px);
+        border-radius: to-rem(14px);
+        min-height: to-rem(28px);
+        min-width: to-rem(28px);
+        transition: all 200ms ease;
+      }
+
+      .refresh-button:hover {
+        background-color: gtkalpha($overlay2, 0.1);
+      }
+
+      .refresh-button icon {
+        color: $overlay2;
+        font-size: to-rem(16px);
+      }
+    }
+
+    .github-feed-container {
+      background-color: gtkalpha($surface1, 0.5);
+      border-radius: to-rem(20px);
+      padding: to-rem(16px);
+      margin-bottom: to-rem(16px);
+
+      .loading-indicator,
+      .error-indicator {
+        padding: to-rem(40px) 0;
+
+        label {
+          color: $overlay2;
+          font-size: to-rem(14px);
+        }
+      }
+
+      .github-feed {
+        min-height: to-rem(300px);
+
+        scrolledwindow {
+          border: none;
+          outline: none;
+          box-shadow: none;
+        }
+
+        viewport {
+          border: none;
+          outline: none;
+        }
+
+        .github-event-item {
+          padding: to-rem(14px) to-rem(16px);
+          border-radius: to-rem(16px);
+          background-color: gtkalpha($surface2, 0.3);
+          transition: all 200ms ease;
+          margin: to-rem(8px) 0;
+          border: to-rem(1px) solid transparent;
+        }
+
+        .github-event-item:hover {
+          background-color: gtkalpha($surface2, 0.5);
+          border-color: gtkalpha($border, 0.15);
+        }
+
+        .avatar-image {
+          border-radius: to-rem(12px);
+          min-width: to-rem(44px);
+          min-height: to-rem(44px);
+          margin-right: to-rem(12px);
+          border: to-rem(1px) solid gtkalpha($border, 0.2);
+        }
+
+        .actor-name {
+          color: $overlay2;
+          font-weight: 600;
+          font-size: to-rem(14px);
+        }
+
+        .event-type {
+          color: $subtext1;
+          font-size: to-rem(14px);
+          font-weight: 400;
+        }
+
+        .repo-name {
+          color: $text;
+          font-size: to-rem(14px);
+          font-weight: 500;
+          margin: to-rem(4px) 0;
+        }
+
+        .event-time {
+          color: $subtext1;
+          font-size: to-rem(12px);
+          margin-top: to-rem(4px);
+        }
+      }
+    }
+  }
+}

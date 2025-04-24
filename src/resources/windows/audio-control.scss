@@ -1,0 +1,223 @@
+@use "../abstracts" as *;
+@use "../components/button" as *;
+@use "sass:color";
+
+window.AudioControlWindow {
+  background: transparent;
+
+  > box {
+    background-color: $surface0;
+    border-radius: to-rem(24px);
+    border: to-rem(1px) solid gtkalpha($border, 0.15);
+    min-width: to-rem(350px);
+    margin: to-rem(12px) to-rem(90px);
+
+    .volume-controls-container {
+      background-color: gtkalpha($surface1, 0.5);
+      border-radius: to-rem(20px);
+      padding: to-rem(15px);
+      margin-bottom: to-rem(16px);
+
+      .speaker-control,
+      .microphone-control {
+        margin: to-rem(5px) 0;
+
+        .speaker-icon,
+        .microphone-icon {
+          font-size: to-rem(20px);
+          color: $overlay2;
+          margin-right: to-rem(10px);
+        }
+
+        label {
+          font-weight: 500;
+          font-size: to-rem(14px);
+        }
+
+        .mute-button {
+          padding: to-rem(6px);
+          background-color: gtkalpha($surface1, 0.6);
+          border-radius: to-rem(18px);
+
+          &:hover {
+            background-color: gtkalpha($surface2, 0.5);
+          }
+
+          icon {
+            font-size: to-rem(18px);
+          }
+        }
+
+        scale {
+          margin: to-rem(12px) 0 to-rem(8px) 0;
+          padding: to-rem(4px) 0;
+
+          trough {
+            background-color: gtkalpha($surface2, 0.5);
+            border-radius: to-rem(12px);
+            min-height: to-rem(10px);
+            transition: all 0.2s ease;
+
+            highlight {
+              border-radius: to-rem(12px);
+              min-height: to-rem(10px);
+              background-color: $overlay2;
+              background-image: none;
+              transition: all 0.2s ease;
+            }
+          }
+
+          &:hover trough,
+          &:active trough {
+            background-color: gtkalpha($surface2, 0.7);
+            min-height: to-rem(14px);
+
+            highlight {
+              min-height: to-rem(14px);
+              background-color: color.scale($overlay2, $lightness: 15%);
+              box-shadow: 0 0 to-rem(6px) gtkalpha($overlay2, 0.4);
+            }
+          }
+
+          slider {
+            opacity: 0;
+            min-height: 0;
+            min-width: 0;
+            border: none;
+            background: transparent;
+            box-shadow: none;
+          }
+        }
+
+        .volume-percentage {
+          color: $subtext0;
+          font-size: to-rem(14px);
+          font-weight: 500;
+          margin-left: to-rem(5px);
+        }
+      }
+    }
+
+    .section-header {
+      margin: to-rem(8px) 0;
+
+      label {
+        font-size: to-rem(16px);
+        font-weight: 600;
+        color: $text;
+      }
+    }
+
+    .device-controls {
+      margin-bottom: to-rem(16px);
+
+      .devices-container {
+        background-color: gtkalpha($surface1, 0.5);
+        border-radius: to-rem(20px);
+        padding: to-rem(10px);
+
+        .device-selector {
+          padding: to-rem(10px);
+          border-radius: to-rem(16px);
+          background-color: transparent;
+          transition: all 200ms ease;
+          margin-bottom: to-rem(4px);
+          border: to-rem(1px) solid transparent;
+
+          &:hover {
+            background-color: gtkalpha($surface2, 0.5);
+          }
+
+          box {
+            icon:first-child {
+              font-size: to-rem(18px);
+              color: $overlay2;
+              margin-right: to-rem(12px);
+            }
+
+            label {
+              font-weight: 500;
+              font-size: to-rem(14px);
+            }
+          }
+
+          icon:last-child {
+            transition: all 250ms cubic-bezier(0.4, 0, 0.2, 1);
+            -gtk-icon-transform: rotate(-90deg);
+            opacity: 0.7;
+
+            &.expanded {
+              -gtk-icon-transform: rotate(0deg);
+              opacity: 1;
+            }
+          }
+        }
+
+        .device-list {
+          padding: to-rem(5px);
+          background-color: gtkalpha($surface1, 0.3);
+          border-radius: to-rem(12px);
+          margin: to-rem(5px);
+
+          button.device-item {
+            padding: to-rem(12px) to-rem(10px);
+            border-radius: to-rem(12px);
+            background-color: transparent;
+            transition: all 200ms ease;
+            margin: to-rem(2px) 0;
+            border: to-rem(1px) solid transparent;
+
+            &:hover {
+              background-color: gtkalpha($surface2, 0.5);
+            }
+
+            &.active {
+              background-color: gtkalpha($overlay2, 0.15);
+              border: to-rem(1px) solid gtkalpha($overlay2, 0.3);
+
+              icon {
+                color: $overlay2;
+              }
+            }
+
+            box {
+              icon {
+                font-size: to-rem(18px);
+                color: $overlay2;
+                opacity: 0.8;
+              }
+
+              label {
+                color: $text;
+                font-weight: 500;
+                font-size: to-rem(14px);
+                margin-left: to-rem(8px);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    .settings {
+      margin-top: to-rem(10px);
+
+      button {
+        @include button;
+        padding: to-rem(12px);
+        background-color: $overlay2;
+        border-radius: to-rem(20px);
+        font-weight: 500;
+        font-size: to-rem(14px);
+        color: $base;
+        border: none;
+        transition: all 200ms ease;
+
+        &:hover {
+          background-color: gtkalpha($overlay2, 0.8);
+          box-shadow: 0 0 to-rem(2px) to-rem(4px) gtkalpha(black, 0.2);
+        }
+      }
+    }
+  }
+}

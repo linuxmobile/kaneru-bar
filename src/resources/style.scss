@@ -1,0 +1,23 @@
+@use "base/reset";
+@use "base/typography";
+
+@use "components/tooltip";
+@use "components/button";
+
+@use "windows/desktop.scss";
+@use "windows/bar";
+@use "windows/dock.scss";
+@use "windows/app-menu";
+@use "windows/notifications";
+@use "windows/OSD";
+@use "windows/github.scss";
+@use "windows/audio-control.scss";
+@use "windows/display-control.scss";
+@use "windows/network.scss";
+@use "windows/battery.scss";
+@use "windows/sysinfo.scss";
+@use "windows/media-control.scss";
+
+@use "widgets/workspaces.scss";
+@use "widgets/active-client";
+@use "widgets/vitals";

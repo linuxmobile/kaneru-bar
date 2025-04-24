@@ -1,0 +1,235 @@
+@use "../abstracts" as *;
+@use "../components/button" as *;
+@use "sass:color";
+
+window.DisplayControlWindow {
+  background: transparent;
+
+  > box {
+    background-color: $surface0;
+    border-radius: to-rem(24px);
+    border: to-rem(1px) solid gtkalpha($border, 0.2);
+    min-width: to-rem(350px);
+    margin: to-rem(12px) to-rem(60px);
+
+    .section-container {
+      background-color: gtkalpha($surface1, 0.5);
+      border-radius: to-rem(20px);
+      padding: to-rem(16px);
+      margin-bottom: to-rem(16px);
+    }
+
+    .brightness-card {
+      > box:first-child {
+        margin-bottom: to-rem(12px);
+
+        .setting-icon {
+          font-size: to-rem(20px);
+          color: $yellow;
+        }
+
+        .setting-title {
+          font-size: to-rem(15px);
+          font-weight: 500;
+          color: $text;
+        }
+
+        .setting-value {
+          font-size: to-rem(13px);
+          font-weight: 500;
+          color: $overlay2;
+          min-width: to-rem(40px);
+        }
+      }
+
+      > box:nth-child(2) {
+        .slider-icon {
+          color: $subtext1;
+          font-size: to-rem(16px);
+          min-width: to-rem(20px);
+        }
+
+        scale {
+          margin: to-rem(4px) 0;
+          padding: to-rem(4px) 0;
+
+          trough {
+            background-color: gtkalpha($surface2, 0.5);
+            border-radius: to-rem(12px);
+            min-height: to-rem(10px);
+            transition: all 0.2s ease;
+
+            highlight {
+              border-radius: to-rem(12px);
+              min-height: to-rem(10px);
+              background-color: $overlay2;
+              background-image: none;
+              transition: all 0.2s ease;
+            }
+          }
+
+          &:hover trough,
+          &:active trough {
+            background-color: gtkalpha($surface2, 0.7);
+            min-height: to-rem(14px);
+
+            highlight {
+              min-height: to-rem(14px);
+              background-color: color.scale($yellow, $lightness: 15%);
+              background-image: none;
+              box-shadow: 0 0 to-rem(6px) gtkalpha($yellow, 0.4);
+            }
+          }
+
+          slider {
+            opacity: 0;
+            min-height: 0;
+            min-width: 0;
+            border: none;
+            background: transparent;
+            box-shadow: none;
+          }
+        }
+      }
+    }
+
+    .quick-toggles-card {
+      .toggles-row {
+        margin-bottom: to-rem(8px);
+      }
+
+      .quick-toggle {
+        border-radius: to-rem(16px);
+        background-color: gtkalpha($surface2, 0.3);
+        padding: to-rem(8px) to-rem(5px);
+        margin-right: to-rem(8px);
+        border: to-rem(1px) solid transparent;
+        transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+
+        &:hover {
+          background-color: gtkalpha($surface2, 0.5);
+          border-color: gtkalpha($border, 0.15);
+        }
+
+        &.active {
+          border-color: gtkalpha($overlay2, 0.3);
+        }
+
+        &.night-light {
+          &.active {
+            background-color: gtkalpha($peach, 0.12);
+            border-color: gtkalpha($peach, 0.3);
+
+            icon,
+            label {
+              color: $peach;
+            }
+          }
+        }
+
+        &.dark-mode {
+          &.active {
+            background-color: gtkalpha($lavender, 0.12);
+            border-color: gtkalpha($lavender, 0.3);
+
+            icon,
+            label {
+              color: $lavender;
+            }
+          }
+        }
+
+        .toggle-icon {
+          font-size: to-rem(20px);
+          margin: to-rem(3px) 0;
+          color: $text;
+        }
+
+        .toggle-label {
+          font-size: to-rem(12px);
+          font-weight: 500;
+          color: $text;
+        }
+      }
+
+      .color-temperature-controls {
+        background-color: gtkalpha($surface2, 0.3);
+        border-radius: to-rem(16px);
+        padding: to-rem(12px);
+        margin-top: to-rem(4px);
+
+        .subsetting-title {
+          font-size: to-rem(14px);
+          font-weight: 500;
+          color: $overlay2;
+          margin-bottom: to-rem(8px);
+        }
+
+        .slider-icon {
+          font-size: to-rem(16px);
+          color: $subtext1;
+        }
+
+        .gamma-slider {
+          margin: to-rem(8px) 0;
+
+          &,
+          &:hover,
+          &:active,
+          &:focus,
+          &:disabled {
+            background-color: transparent;
+          }
+
+          trough {
+            background-image: linear-gradient(to right, $peach 0%, $blue 100%);
+            border-radius: to-rem(8px);
+            min-height: to-rem(4px);
+
+            highlight {
+              background-color: transparent;
+              background-image: none;
+              border: none;
+            }
+          }
+
+          slider {
+            min-width: to-rem(18px);
+            min-height: to-rem(18px);
+            background-color: $text;
+            border-radius: 50%;
+            box-shadow: 0 to-rem(1px) to-rem(3px) gtkalpha(black, 0.2);
+            margin: to-rem(-7px);
+          }
+        }
+
+        .slider-label {
+          font-size: to-rem(12px);
+          color: $subtext1;
+          margin-top: to-rem(4px);
+        }
+      }
+    }
+
+    .settings {
+      margin-top: to-rem(8px);
+
+      .settings-button {
+        @include button;
+        padding: to-rem(12px);
+        background-color: $overlay2;
+        border-radius: to-rem(20px);
+        font-weight: 500;
+        font-size: to-rem(14px);
+        color: $base;
+        border: none;
+        transition: all 200ms ease;
+
+        &:hover {
+          background-color: gtkalpha($overlay2, 0.9);
+          box-shadow: 0 to-rem(2px) to-rem(4px) gtkalpha(black, 0.2);
+        }
+      }
+    }
+  }
+}

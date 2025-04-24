@@ -1,0 +1,12 @@
+@use "../abstracts" as *;
+
+.ActiveClient {
+  .app-id {
+    font-size: to-rem(13px);
+    color: $overlay2;
+  }
+  .window-title {
+    font-size: to-rem(15px);
+    font-weight: 600;
+  }
+}

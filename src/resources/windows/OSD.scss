@@ -1,0 +1,116 @@
+@use "sass:string";
+@use "sass:color";
+@use "../abstracts" as *;
+
+window.OSDWindow {
+  @include unset;
+  background: transparent;
+  box-shadow: none;
+}
+
+.OSD {
+  background-color: gtkalpha($surface0, 0.95);
+  border-radius: to-rem(24px);
+  border: to-rem(1px) solid gtkalpha($border, 0.15);
+  margin: to-rem(32px) 0;
+  box-shadow: 0 to-rem(4px) to-rem(20px) gtkalpha(black, 0.2);
+  padding: to-rem(5px);
+
+  scale {
+    trough {
+      background-color: gtkalpha($surface2, 0.5);
+      min-height: to-rem(10px);
+      border-radius: to-rem(12px);
+
+      highlight {
+        background-color: $overlay2;
+        background-image: none;
+        border-radius: to-rem(12px);
+        min-height: to-rem(10px);
+      }
+    }
+
+    slider {
+      opacity: 0;
+      min-height: 0;
+      min-width: 0;
+      border: none;
+      background: transparent;
+      box-shadow: none;
+    }
+  }
+
+  .volume-indicator-mute,
+  .mic-indicator-mute {
+    padding-right: to-rem(8px);
+    icon {
+      padding-right: to-rem(8px);
+    }
+  }
+
+  .volume-indicator,
+  .volume-indicator-mute,
+  .mic-indicator,
+  .mic-indicator-mute {
+    padding: to-rem(14px) to-rem(18px);
+    margin: to-rem(4px);
+
+    .indicator {
+      icon {
+        margin-right: to-rem(12px);
+        font-size: to-rem(24px);
+      }
+
+      label {
+        color: $text;
+        font-size: to-rem(14px);
+        font-weight: 500;
+        padding-right: to-rem(8px);
+      }
+    }
+  }
+
+  .volume-indicator {
+    .indicator icon {
+      color: $overlay2;
+    }
+
+    scale trough highlight {
+      background-color: $overlay2;
+      background-image: none;
+    }
+  }
+
+  .mic-indicator {
+    .indicator icon {
+      color: $red;
+    }
+
+    scale trough highlight {
+      background-color: $red;
+      background-image: none;
+    }
+  }
+
+  .volume-indicator-mute,
+  .mic-indicator-mute {
+    .indicator {
+      icon {
+        color: $red;
+      }
+
+      label {
+        color: $subtext1;
+      }
+    }
+
+    scale trough {
+      background-color: gtkalpha($surface2, 0.3);
+
+      highlight {
+        background-color: $overlay2;
+        background-image: none;
+      }
+    }
+  }
+}

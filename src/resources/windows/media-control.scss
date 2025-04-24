@@ -1,0 +1,115 @@
+@use "../abstracts" as *;
+
+window.MediaControlWindow {
+  background: transparent;
+
+  > box {
+    background-color: $surface0;
+    border-radius: to-rem(20px);
+    margin: to-rem(12px) 0;
+
+    .album-image {
+      border-radius: to-rem(20px);
+      background-size: cover;
+      background-position: center;
+      min-width: to-rem(150px);
+      min-height: to-rem(150px);
+    }
+
+    .media-info {
+      min-width: to-rem(400px);
+
+      .media-title {
+        font-size: to-rem(24px);
+        font-weight: 600;
+        color: $overlay2;
+      }
+
+      .media-artist {
+        font-size: to-rem(16px);
+        font-weight: 500;
+        color: $text;
+      }
+
+      .media-album {
+        font-size: to-rem(14px);
+        color: $subtext1;
+      }
+    }
+
+    .progress-tracker {
+      label {
+        font-size: to-rem(12px);
+        font-weight: 500;
+        color: $subtext1;
+        min-width: to-rem(45px);
+      }
+
+      .progress-slider {
+        trough {
+          background-color: gtkalpha($surface2, 0.5);
+          border-radius: to-rem(12px);
+          min-height: to-rem(4px);
+          transition: all 200ms ease;
+
+          highlight {
+            background-color: $overlay2;
+            border-radius: to-rem(12px);
+            min-height: to-rem(4px);
+            transition: all 200ms ease;
+          }
+        }
+
+        &:hover trough {
+          min-height: to-rem(6px);
+
+          highlight {
+            min-height: to-rem(6px);
+            background-color: gtkalpha($overlay2, 0.8);
+          }
+        }
+
+        slider {
+          opacity: 0;
+          min-height: 0;
+          min-width: 0;
+          border: none;
+          background: transparent;
+          box-shadow: none;
+        }
+      }
+    }
+
+    .playback-controls {
+      button {
+        background-color: gtkalpha($surface1, 0.6);
+        border-radius: to-rem(16px);
+        transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+        border: to-rem(1px) solid transparent;
+
+        &:hover {
+          background-color: gtkalpha($surface2, 0.6);
+          border-color: gtkalpha($border, 0.15);
+        }
+
+        &:active {
+          background-color: gtkalpha($overlay2, 0.15);
+          border-color: gtkalpha($overlay2, 0.3);
+        }
+
+        &:disabled {
+          opacity: 0.5;
+        }
+
+        icon {
+          color: $text;
+
+          &.media-playback-pause-symbolic,
+          &.media-playback-start-symbolic {
+            font-size: to-rem(24px);
+          }
+        }
+      }
+    }
+  }
+}

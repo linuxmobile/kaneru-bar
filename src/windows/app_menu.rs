@@ -15,21 +15,27 @@ pub struct AppMenu {
 impl AppMenu {
     pub fn new() -> Self {
         let popover = Popover::new();
+        popover.add_css_class("AppMenuPopover");
+
         let container = Box::new(Orientation::Vertical, 6);
         container.set_margin_start(12);
         container.set_margin_end(12);
         container.set_margin_top(12);
         container.set_margin_bottom(12);
+        container.add_css_class("app-menu-container");
 
         let search_entry = SearchEntry::new();
+        search_entry.add_css_class("app-menu-search");
         container.append(&search_entry);
 
         let scroll = ScrolledWindow::new();
         scroll.set_min_content_height(400);
         scroll.set_min_content_width(300);
         scroll.set_policy(gtk4::PolicyType::Never, gtk4::PolicyType::Automatic);
+        scroll.add_css_class("app-menu-scroll");
 
         let list_box = ListBox::new();
+        list_box.add_css_class("app-menu-list");
         list_box.set_selection_mode(SelectionMode::None);
 
         let all_apps = Self::load_applications();
@@ -79,6 +85,7 @@ impl AppMenu {
         row.set_margin_end(6);
         row.set_margin_top(6);
         row.set_margin_bottom(6);
+        row.add_css_class("app-menu-item-box");
 
         let image = match icon {
             Some(gicon) => Image::from_gicon(gicon),
@@ -88,17 +95,19 @@ impl AppMenu {
                 Image::from_gicon(&fallback_icon)
             }
         };
+        image.add_css_class("app-menu-item-icon");
         image.set_pixel_size(32);
         row.append(&image);
 
         let label = Label::new(Some(name));
+        label.add_css_class("app-menu-item-label");
         label.set_halign(Align::Start);
         label.set_hexpand(true);
         row.append(&label);
 
         let button = Button::new();
+        button.add_css_class("app-menu-item");
         button.set_child(Some(&row));
-        button.set_css_classes(&["flat"]);
 
         let exec = exec.to_string();
         let name = name.to_string();

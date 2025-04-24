@@ -34,12 +34,14 @@
               graphene
               wayland
               adwaita-icon-theme
+              dart-sass
             ];
 
             nativeBuildInputs = with pkgs; [
               rustPlatform.bindgenHook
               pkg-config
               wrapGAppsHook4
+              glib
             ];
           };
       };

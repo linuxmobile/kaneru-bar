@@ -1,0 +1,58 @@
+@use "../abstracts" as *;
+
+.AppMenuPopover {
+  background: transparent;
+
+  .app-menu-container {
+    background-color: $surface0;
+    border-radius: to-rem(16px);
+    border: to-rem(1px) solid gtkalpha($border, 0.2);
+    min-width: to-rem(300px);
+  }
+
+  .app-menu-search {
+    margin-bottom: to-rem(8px);
+  }
+
+  .app-menu-scroll {
+    border: none;
+    background: transparent;
+
+    scrolledwindow,
+    viewport {
+      border: none;
+      background: transparent;
+    }
+  }
+
+  .app-menu-list {
+    background: transparent;
+  }
+
+  .app-menu-item {
+    background-color: transparent;
+    border-radius: to-rem(12px);
+    border: none;
+    padding: 0;
+    margin: to-rem(2px) 0;
+    transition: background-color 200ms ease;
+
+    &:hover {
+      background-color: gtkalpha($surface1, 0.6);
+    }
+
+    .app-menu-item-box {
+      padding: to-rem(6px) to-rem(8px);
+    }
+
+    .app-menu-item-icon {
+      margin-right: to-rem(12px);
+    }
+
+    .app-menu-item-label {
+      color: $text;
+      font-size: to-rem(14px);
+      font-weight: 500;
+    }
+  }
+}

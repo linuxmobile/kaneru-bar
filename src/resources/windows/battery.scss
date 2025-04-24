@@ -1,0 +1,192 @@
+@use "../abstracts" as *;
+
+window.BatteryWindow {
+  background: transparent;
+
+  > box {
+    background-color: $surface0;
+    border-radius: to-rem(24px);
+    border: to-rem(1px) solid gtkalpha($border, 0.2);
+    min-width: to-rem(350px);
+    margin: to-rem(12px) to-rem(90px);
+
+    .battery-main-info {
+      margin-bottom: to-rem(16px);
+
+      icon {
+        font-size: to-rem(48px);
+        color: $overlay2;
+        margin-right: to-rem(16px);
+      }
+
+      box label {
+        &:first-child {
+          font-size: to-rem(18px);
+          font-weight: 600;
+          color: $text;
+          margin-bottom: to-rem(2px);
+        }
+
+        &:last-child {
+          font-size: to-rem(14px);
+          color: $subtext1;
+        }
+      }
+    }
+
+    .battery-info-container {
+      background-color: gtkalpha($surface1, 0.5);
+      border-radius: to-rem(20px);
+      padding: to-rem(16px);
+      margin-bottom: to-rem(16px);
+
+      .battery-details {
+        box {
+          margin: to-rem(6px) 0;
+
+          label {
+            &:nth-child(1) {
+              color: $subtext1;
+              font-size: to-rem(14px);
+            }
+
+            &:nth-child(2) {
+              color: $text;
+              font-size: to-rem(14px);
+              font-weight: 500;
+            }
+          }
+        }
+      }
+    }
+
+    .power-profiles-section {
+      margin-bottom: to-rem(16px);
+
+      > label {
+        font-size: to-rem(16px);
+        font-weight: 600;
+        color: $text;
+        margin-bottom: to-rem(8px);
+      }
+
+      .power-mode-buttons {
+        .power-mode-button {
+          background-color: gtkalpha($surface1, 0.5);
+          border-radius: to-rem(16px);
+          padding: to-rem(12px) to-rem(8px);
+          transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+          border: to-rem(1px) solid transparent;
+
+          &:hover {
+            background-color: gtkalpha($surface2, 0.6);
+            border-color: gtkalpha($border, 0.15);
+          }
+
+          &.active {
+            background-color: gtkalpha($overlay2, 0.15);
+            border-color: gtkalpha($overlay2, 0.3);
+
+            label {
+              color: $overlay2;
+              font-weight: 600;
+            }
+          }
+
+          label {
+            font-size: to-rem(13px);
+            font-weight: 500;
+            color: $text;
+          }
+        }
+      }
+    }
+
+    .conservation-mode-section {
+      margin-bottom: to-rem(16px);
+
+      > label {
+        font-size: to-rem(16px);
+        font-weight: 600;
+        color: $text;
+        margin-bottom: to-rem(8px);
+      }
+
+      .conservation-mode-button {
+        background-color: gtkalpha($surface1, 0.5);
+        border-radius: to-rem(18px);
+        padding: to-rem(14px) to-rem(16px);
+        transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+        border: to-rem(1px) solid transparent;
+
+        &:hover {
+          background-color: gtkalpha($surface2, 0.6);
+          border-color: gtkalpha($border, 0.15);
+        }
+
+        &.active {
+          background-color: gtkalpha($overlay2, 0.15);
+          border-color: gtkalpha($overlay2, 0.3);
+
+          icon:first-child {
+            color: $overlay2;
+          }
+
+          box label:first-child {
+            color: $overlay2;
+          }
+
+          icon:last-child {
+            color: $overlay2;
+          }
+        }
+
+        icon:first-child {
+          font-size: to-rem(22px);
+          color: $text;
+          margin-right: to-rem(10px);
+        }
+
+        box {
+          label:first-child {
+            font-size: to-rem(14px);
+            font-weight: 500;
+            color: $text;
+            margin-bottom: to-rem(2px);
+          }
+
+          label:last-child {
+            font-size: to-rem(12px);
+            color: $subtext1;
+          }
+        }
+
+        icon:last-child {
+          font-size: to-rem(16px);
+          color: $subtext0;
+        }
+      }
+    }
+
+    .settings-section {
+      .settings-button {
+        background-color: $overlay2;
+        border-radius: to-rem(20px);
+        padding: to-rem(14px);
+        transition: all 200ms ease;
+        border: none;
+
+        &:hover {
+          background-color: gtkalpha($overlay2, 0.8);
+          box-shadow: 0 to-rem(2px) to-rem(4px) gtkalpha(black, 0.2);
+        }
+
+        label {
+          font-size: to-rem(14px);
+          font-weight: 500;
+          color: $base;
+        }
+      }
+    }
+  }
+}
