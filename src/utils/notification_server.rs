@@ -26,14 +26,14 @@ impl NotificationServer {
         }
     }
 
-    pub async fn set_connection(&self, connection: Connection) {
-        let mut conn_guard = self.connection.lock().await;
-        *conn_guard = Some(connection);
+    pub async fn set_connection(&self, conn: Connection) {
+        let mut g = self.connection.lock().await;
+        *g = Some(conn);
     }
 
     pub async fn emit_notification_closed(&self, id: u32, reason: u32) -> zbus::Result<()> {
-        if let Some(conn) = &*self.connection.lock().await {
-            conn.emit_signal(
+        if let Some(c) = &*self.connection.lock().await {
+            c.emit_signal(
                 None::<()>,
                 "/org/freedesktop/Notifications",
                 "org.freedesktop.Notifications",
@@ -42,22 +42,22 @@ impl NotificationServer {
             )
             .await
         } else {
-            Err(zbus::Error::Failure("No D-Bus connection available".into()))
+            Err(zbus::Error::Failure("No D-Bus connection".into()))
         }
     }
 
-    pub async fn emit_action_invoked(&self, id: u32, action_key: &str) -> zbus::Result<()> {
-        if let Some(conn) = &*self.connection.lock().await {
-            conn.emit_signal(
+    pub async fn emit_action_invoked(&self, id: u32, key: &str) -> zbus::Result<()> {
+        if let Some(c) = &*self.connection.lock().await {
+            c.emit_signal(
                 None::<()>,
                 "/org/freedesktop/Notifications",
                 "org.freedesktop.Notifications",
                 "ActionInvoked",
-                &(id, action_key),
+                &(id, key),
             )
             .await
         } else {
-            Err(zbus::Error::Failure("No D-Bus connection available".into()))
+            Err(zbus::Error::Failure("No D-Bus connection".into()))
         }
     }
 }
@@ -76,43 +76,35 @@ impl NotificationServer {
         hints_raw: HashMap<String, Value<'_>>,
         expire_timeout: i32,
     ) -> zbus::fdo::Result<u32> {
-        let new_id = if replaces_id == 0 {
+        let id = if replaces_id == 0 {
             NEXT_NOTIFICATION_ID.fetch_add(1, Ordering::Relaxed)
         } else {
             replaces_id
         };
 
-        let mut owned_hints_temp = HashMap::new();
+        let mut owned = HashMap::new();
         for (k, v) in hints_raw {
-            match v.try_to_owned() {
-                Ok(owned_v) => {
-                    owned_hints_temp.insert(k, owned_v);
-                }
-                Err(e) => {
-                    eprintln!(
-                        "Warning: Failed to convert hint '{}' to owned value: {}",
-                        k, e
-                    );
-                }
+            if let Ok(o) = v.try_to_owned() {
+                owned.insert(k, o);
             }
         }
 
-        let urgency = owned_hints_temp
+        let urgency = owned
             .get("urgency")
             .and_then(|v| Urgency::try_from(v.clone()).ok())
             .unwrap_or(Urgency::Normal);
 
-        let image_path = owned_hints_temp
+        let image_path = owned
             .get("image-path")
             .and_then(|v| String::try_from(v.clone()).ok());
 
-        let resident = owned_hints_temp
+        let resident = owned
             .get("resident")
             .and_then(|v| bool::try_from(v.clone()).ok())
             .unwrap_or(false);
 
         let notification = Notification::new(
-            new_id,
+            id,
             app_name.clone(),
             replaces_id,
             app_icon.clone(),
@@ -126,104 +118,52 @@ impl NotificationServer {
         );
 
         {
-            let mut active_notifications = self.active_notifications.lock().await;
-            active_notifications.insert(new_id, notification.clone());
+            let mut m = self.active_notifications.lock().await;
+            m.insert(id, notification.clone());
         }
 
-        if let Err(e) = self.notify_tx.send(notification).await {
-            eprintln!("Failed to send notification to UI manager: {}", e);
-            return Err(zbus::fdo::Error::Failed(format!(
-                "Internal error: Failed to queue notification for display: {}",
-                e
-            )));
-        }
-
-        Ok(new_id)
+        let _ = self.notify_tx.send(notification).await;
+        Ok(id)
     }
 
     #[zbus(name = "CloseNotification")]
     async fn close_notification(&self, id: u32) -> zbus::fdo::Result<()> {
-        let reason = 3;
-
-        let notification_exists = {
-            let mut active_notifications = self.active_notifications.lock().await;
-            active_notifications.remove(&id).is_some()
-        };
-
-        if notification_exists {
-            if let Err(e) = self.emit_notification_closed(id, reason).await {
-                eprintln!("Failed to emit NotificationClosed signal: {}", e);
-            }
-            Ok(())
-        } else {
-            eprintln!(
-                "Request to close non-existent notification via D-Bus: id={}",
-                id
-            );
-            Ok(())
+        let removed = self.active_notifications.lock().await.remove(&id).is_some();
+        if removed {
+            let _ = self.emit_notification_closed(id, 3).await;
         }
+        Ok(())
     }
 
     #[zbus(name = "GetCapabilities")]
     async fn get_capabilities(&self) -> zbus::fdo::Result<Vec<String>> {
         Ok(vec![
-            "body".to_string(),
-            "actions".to_string(),
-            "persistence".to_string(),
-            "icon-static".to_string(),
-            "body-markup".to_string(),
+            "body".into(),
+            "actions".into(),
+            "persistence".into(),
+            "icon-static".into(),
+            "body-markup".into(),
         ])
     }
 
     #[zbus(name = "GetServerInformation")]
     async fn get_server_information(&self) -> zbus::fdo::Result<(String, String, String, String)> {
         Ok((
-            env!("CARGO_PKG_NAME").to_string(),
-            "Kaneru Project".to_string(),
-            env!("CARGO_PKG_VERSION").to_string(),
-            "1.2".to_string(),
+            env!("CARGO_PKG_NAME").into(),
+            "Kaneru Project".into(),
+            env!("CARGO_PKG_VERSION").into(),
+            "1.2".into(),
         ))
     }
 }
 
-pub async fn run_server_task(server: Arc<NotificationServer>) -> Result<(), zbus::Error> {
-    println!("Starting notification D-Bus server task...");
-
-    let connection = Connection::session().await?;
-    connection
-        .request_name("org.freedesktop.Notifications")
+pub async fn run_server_task(srv: Arc<NotificationServer>) -> Result<(), zbus::Error> {
+    let conn = Connection::session().await?;
+    conn.request_name("org.freedesktop.Notifications").await?;
+    srv.set_connection(conn.clone()).await;
+    conn.object_server()
+        .at("/org/freedesktop/Notifications", srv.as_ref().clone())
         .await?;
-
-    server.set_connection(connection.clone()).await;
-
-    connection
-        .object_server()
-        .at("/org/freedesktop/Notifications", server.as_ref().clone())
-        .await?;
-
-    println!("Notification server registered on D-Bus.");
-
     pending::<()>().await;
-
     Ok(())
-}
-
-pub mod signals {
-    use super::*;
-
-    pub async fn emit_notification_closed(
-        server: &Arc<NotificationServer>,
-        id: u32,
-        reason: u32,
-    ) -> zbus::Result<()> {
-        server.emit_notification_closed(id, reason).await
-    }
-
-    pub async fn emit_action_invoked(
-        server: &Arc<NotificationServer>,
-        id: u32,
-        action_key: &str,
-    ) -> zbus::Result<()> {
-        server.emit_action_invoked(id, action_key).await
-    }
 }
