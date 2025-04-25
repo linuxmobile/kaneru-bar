@@ -69,9 +69,9 @@ popover.DatePopupWindow {
     }
 
     .day-name {
-        color: $subtext1;
-        font-size: to-rem(12px);
-        font-weight: 500;
+      color: $subtext1;
+      font-size: to-rem(12px);
+      font-weight: 500;
     }
 
     .day-number {
@@ -108,19 +108,19 @@ popover.DatePopupWindow {
     }
 
     button {
-        padding: to-rem(4px);
-        border-radius: to-rem(4px);
-        background-color: transparent;
-        border: none;
-        transition: background-color 150ms ease;
+      padding: to-rem(4px);
+      border-radius: to-rem(4px);
+      background-color: transparent;
+      border: none;
+      transition: background-color 150ms ease;
 
-        &:hover {
-            background-color: gtkalpha($surface1, 0.6);
-        }
+      &:hover {
+        background-color: gtkalpha($surface1, 0.6);
+      }
 
-        arrow {
-            color: $overlay2;
-        }
+      arrow {
+        color: $overlay2;
+      }
     }
   }
 }
