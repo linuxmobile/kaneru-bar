@@ -3,6 +3,7 @@
 window.notification-popup-window {
   background-color: transparent;
   border: none;
+  margin-top: to-rem(32px);
 
   .notification-content-box {
     min-width: to-rem(400px);

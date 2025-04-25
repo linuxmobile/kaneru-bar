@@ -1,0 +1,126 @@
+@use "../abstracts" as *;
+
+popover.DatePopupWindow {
+  background-color: $surface0;
+  border-radius: to-rem(12px);
+  border: to-rem(1px) solid gtkalpha($border, 0.2);
+  padding: 0;
+  margin-top: to-rem(32px);
+
+  .pomodoro-controls {
+    button.pomodoro-button {
+      padding: to-rem(6px);
+      min-height: to-rem(32px);
+      min-width: to-rem(32px);
+      border-radius: to-rem(8px);
+      background-color: gtkalpha($surface1, 0.6);
+      border: none;
+      transition: background-color 150ms ease;
+
+      &:hover {
+        background-color: gtkalpha($surface2, 0.8);
+      }
+
+      icon {
+        font-size: to-rem(18px);
+        color: $text;
+      }
+
+      &:disabled {
+        background-color: gtkalpha($surface1, 0.3);
+        icon {
+          opacity: 0.5;
+        }
+      }
+    }
+
+    .pomodoro-label {
+      font-size: to-rem(28px);
+      font-weight: 600;
+      color: $overlay2;
+      min-width: to-rem(100px);
+      margin: 0 to-rem(10px);
+    }
+  }
+
+  .live-clock-label {
+    font-size: to-rem(18px);
+    font-weight: 500;
+    color: $text;
+    margin-bottom: to-rem(10px);
+  }
+
+  separator {
+    background-color: gtkalpha($border, 0.2);
+    min-height: 1px;
+    margin: to-rem(5px) 0;
+  }
+
+  calendar.date-calendar {
+    background-color: transparent;
+    font-size: to-rem(14px);
+
+    .header {
+      color: $overlay2;
+      font-weight: 600;
+      padding-bottom: to-rem(8px);
+      margin-bottom: to-rem(5px);
+      border-bottom: 1px solid gtkalpha($border, 0.1);
+    }
+
+    .day-name {
+        color: $subtext1;
+        font-size: to-rem(12px);
+        font-weight: 500;
+    }
+
+    .day-number {
+      color: $text;
+      border-radius: to-rem(4px);
+      transition: all 150ms ease;
+      padding: to-rem(4px);
+      margin: to-rem(1px);
+
+      &:hover {
+        background-color: gtkalpha($surface1, 0.6);
+      }
+    }
+
+    .today {
+      color: $blue;
+      font-weight: bold;
+      border: 1px solid gtkalpha($blue, 0.4);
+    }
+
+    .other-month {
+      color: $subtext0;
+      opacity: 0.6;
+    }
+
+    .highlight {
+      color: $subtext1;
+    }
+
+    .selected {
+      background-color: $overlay2;
+      color: $base;
+      border-radius: to-rem(4px);
+    }
+
+    button {
+        padding: to-rem(4px);
+        border-radius: to-rem(4px);
+        background-color: transparent;
+        border: none;
+        transition: background-color 150ms ease;
+
+        &:hover {
+            background-color: gtkalpha($surface1, 0.6);
+        }
+
+        arrow {
+            color: $overlay2;
+        }
+    }
+  }
+}
