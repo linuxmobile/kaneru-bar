@@ -1,7 +1,7 @@
 use gtk4::prelude::*;
 use gtk4::{
-    gio, glib, Align, Box as GtkBox, Button, Image, Label, ListBox, Orientation, Popover,
-    ScrolledWindow, SearchEntry, SelectionMode, Spinner,
+    gdk, gio, glib, Align, Box as GtkBox, Button, EventControllerKey, Image, Label, ListBox,
+    Orientation, Popover, ScrolledWindow, SearchEntry, SelectionMode, Spinner,
 };
 use std::{cell::Cell, cell::RefCell, rc::Rc};
 
@@ -56,6 +56,21 @@ impl AppMenu {
         container.append(&scroll);
 
         popover.set_child(Some(&container));
+
+        let key_controller = EventControllerKey::new();
+        let popover_weak = popover.downgrade();
+        key_controller.connect_key_pressed(move |_, keyval, _, _| {
+            if keyval == gdk::Key::Escape {
+                if let Some(popover) = popover_weak.upgrade() {
+                    if popover.is_visible() {
+                        popover.popdown();
+                        return glib::Propagation::Stop;
+                    }
+                }
+            }
+            glib::Propagation::Proceed
+        });
+        search_entry.add_controller(key_controller);
 
         let menu = Rc::new(Self {
             popover,
@@ -217,9 +232,16 @@ impl AppMenu {
 
     fn connect_popover_visibility(self: &Rc<Self>) {
         let self_clone = self.clone();
+        let search_entry_clone = self.search_entry.clone();
         self.popover.connect_visible_notify(move |popover| {
-            if popover.is_visible() && !self_clone.apps_loaded.get() {
-                self_clone.clone().load_applications_async();
+            if popover.is_visible() {
+                search_entry_clone.set_can_focus(true);
+                search_entry_clone.grab_focus();
+                if !self_clone.apps_loaded.get() {
+                    self_clone.clone().load_applications_async();
+                }
+            } else {
+                search_entry_clone.set_text("");
             }
         });
     }

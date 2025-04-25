@@ -8,7 +8,7 @@ use gtk4::prelude::*;
 use gtk4::{
     glib, Application, ApplicationWindow, Box as GtkBox, Button, Label, MenuButton, Orientation,
 };
-use gtk4_layer_shell::{Edge, Layer, LayerShell};
+use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
 use std::{rc::Rc, time::Duration};
 
 pub struct BarWindow {
@@ -27,6 +27,7 @@ impl BarWindow {
         window.set_anchor(Edge::Top, true);
         window.set_anchor(Edge::Left, true);
         window.set_anchor(Edge::Right, true);
+        window.set_keyboard_mode(KeyboardMode::None);
 
         let container = GtkBox::new(Orientation::Horizontal, 0);
         let left_box = GtkBox::new(Orientation::Horizontal, 6);
@@ -51,6 +52,7 @@ impl BarWindow {
         let date_popover = date_window_instance.popover().clone();
 
         let config_clone = config.clone();
+        let window_weak = window.downgrade();
 
         let mut add_module = |m: &ModuleType, target: &GtkBox| match m {
             ModuleType::AppMenu => {
@@ -70,8 +72,23 @@ impl BarWindow {
 
                 let menu = AppMenu::new();
                 btn.set_popover(Some(menu.popover()));
-                app_menu_instance = Some(menu);
 
+                let popover = menu.popover().clone();
+                let window_weak_clone_show = window_weak.clone();
+                popover.connect_show(move |_| {
+                    if let Some(window) = window_weak_clone_show.upgrade() {
+                        window.set_keyboard_mode(KeyboardMode::Exclusive);
+                    }
+                });
+
+                let window_weak_clone_closed = window_weak.clone();
+                popover.connect_closed(move |_| {
+                    if let Some(window) = window_weak_clone_closed.upgrade() {
+                        window.set_keyboard_mode(KeyboardMode::None);
+                    }
+                });
+
+                app_menu_instance = Some(menu);
                 target.append(&btn);
             }
             ModuleType::ActiveClient => {
