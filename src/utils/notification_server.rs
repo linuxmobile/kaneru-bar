@@ -1,4 +1,4 @@
-use crate::utils::notification::{Notification, Urgency};
+use crate::utils::{Notification, Urgency};
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::future::pending;

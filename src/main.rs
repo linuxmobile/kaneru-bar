@@ -33,6 +33,7 @@ async fn main() -> glib::ExitCode {
 
     let command_tx_clone = command_tx.clone();
     let server_clone = notification_server.clone();
+    let config_for_manager = config.clone();
 
     notification_manager::run_manager_task(
         app.clone(),
@@ -40,6 +41,7 @@ async fn main() -> glib::ExitCode {
         command_tx_clone,
         command_rx,
         server_clone,
+        config_for_manager,
     );
 
     let server_handle = tokio::spawn(notification_server::run_server_task(

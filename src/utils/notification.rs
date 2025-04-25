@@ -1,3 +1,5 @@
+use crate::utils::persistence::UrgencySerde;
+use serde::{Deserialize, Serialize};
 use zbus::zvariant::{OwnedValue, Type};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Type)]
@@ -36,7 +38,7 @@ impl<'a> TryFrom<&zbus::zvariant::Value<'a>> for Urgency {
     }
 }
 
-#[derive(Debug, Clone, Type)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Type)]
 #[zvariant(signature = "a{sv}")]
 pub struct Notification {
     pub id: u32,
@@ -47,6 +49,7 @@ pub struct Notification {
     pub body: String,
     pub actions: Vec<String>,
     pub expire_timeout: i32,
+    #[serde(with = "urgency_serde_helper")]
     pub urgency: Urgency,
     pub image_path: Option<String>,
     pub resident: bool,
@@ -79,5 +82,25 @@ impl Notification {
             image_path,
             resident,
         }
+    }
+}
+
+mod urgency_serde_helper {
+    use super::{Urgency, UrgencySerde};
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn serialize<S>(urgency: &Urgency, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        UrgencySerde::from(*urgency).serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Urgency, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let urgency_serde = UrgencySerde::deserialize(deserializer)?;
+        Ok(Urgency::from(urgency_serde))
     }
 }

@@ -9,6 +9,15 @@ pub enum ModuleType {
     Clock,
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq, Hash)]
+#[serde(rename_all = "kebab-case")]
+pub enum NotificationPosition {
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct BarConfig {
@@ -18,6 +27,7 @@ pub struct BarConfig {
     pub modules_right: Vec<ModuleType>,
     pub distro_icon_override: Option<String>,
     pub clock_format: Option<String>,
+    pub notification_position: NotificationPosition,
 }
 
 impl Default for BarConfig {
@@ -29,6 +39,7 @@ impl Default for BarConfig {
             modules_right: vec![ModuleType::Clock],
             distro_icon_override: None,
             clock_format: Some("%A %e, %H:%M".to_string()),
+            notification_position: NotificationPosition::TopRight,
         }
     }
 }
@@ -60,5 +71,8 @@ pub fn load_config() -> BarConfig {
         let cfg: BarConfig = serde_yaml::from_str(&s)?;
         Ok(cfg)
     }
-    load().unwrap_or_else(|_| BarConfig::default())
+    load().unwrap_or_else(|e| {
+        eprintln!("Failed to load config: {}. Using default.", e);
+        BarConfig::default()
+    })
 }
