@@ -108,6 +108,7 @@
   }
   .clock-button {
     @include button;
+    margin: to-rem(6px) 0;
   }
   .sysinfo-button {
     border-radius: 100%;

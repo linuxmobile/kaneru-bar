@@ -60,7 +60,6 @@ impl DateWindow {
         let pomodoro_state = Rc::new(RefCell::new(PomodoroState::new(25)));
 
         let pomodoro_box = GtkBox::new(Orientation::Horizontal, 10);
-        pomodoro_box.set_halign(Align::Center);
         pomodoro_box.add_css_class("pomodoro-controls");
 
         let decrease_button = Button::from_icon_name("list-remove-symbolic");
@@ -86,15 +85,18 @@ impl DateWindow {
         pomodoro_box.append(&increase_button);
         pomodoro_box.append(&start_pause_button);
 
-        main_box.append(&pomodoro_box);
-
         let live_clock_label = Label::builder()
             .label(&Local::now().format("%H:%M:%S").to_string())
-            .halign(Align::Center)
+            .halign(Align::End)
+            .hexpand(true)
             .build();
         live_clock_label.add_css_class("live-clock-label");
-        main_box.append(&live_clock_label);
 
+        let top_row_box = GtkBox::new(Orientation::Horizontal, 20);
+        top_row_box.append(&pomodoro_box);
+        top_row_box.append(&live_clock_label);
+
+        main_box.append(&top_row_box);
         main_box.append(&Separator::new(Orientation::Horizontal));
 
         let calendar = Calendar::new();
