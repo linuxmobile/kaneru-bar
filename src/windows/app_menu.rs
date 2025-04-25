@@ -1,23 +1,28 @@
-use gio::prelude::*;
 use gtk4::prelude::*;
 use gtk4::{
-    Align, Box, Button, Image, Label, ListBox, Orientation, Popover, ScrolledWindow, SearchEntry,
-    SelectionMode,
+    gio, glib, Align, Box as GtkBox, Button, Image, Label, ListBox, Orientation, Popover,
+    ScrolledWindow, SearchEntry, SelectionMode, Spinner,
 };
+use std::{cell::Cell, cell::RefCell, rc::Rc};
+
+type AppInfoData = (String, Option<String>, String);
+type AppInfoEntry = (String, Option<gio::Icon>, String);
 
 pub struct AppMenu {
     popover: Popover,
     list_box: ListBox,
     search_entry: SearchEntry,
-    all_apps: Vec<(String, Option<gio::Icon>, String)>,
+    spinner: Spinner,
+    all_apps: Rc<RefCell<Option<Vec<AppInfoEntry>>>>,
+    apps_loaded: Rc<Cell<bool>>,
 }
 
 impl AppMenu {
-    pub fn new() -> Self {
+    pub fn new() -> Rc<Self> {
         let popover = Popover::new();
         popover.add_css_class("AppMenuPopover");
 
-        let container = Box::new(Orientation::Vertical, 6);
+        let container = GtkBox::new(Orientation::Vertical, 6);
         container.add_css_class("app-menu-container");
 
         let search_entry = SearchEntry::new();
@@ -34,37 +39,105 @@ impl AppMenu {
         list_box.add_css_class("app-menu-list");
         list_box.set_selection_mode(SelectionMode::None);
 
-        let all_apps = Self::load_applications();
+        let spinner = Spinner::builder()
+            .spinning(true)
+            .halign(Align::Center)
+            .valign(Align::Center)
+            .hexpand(true)
+            .vexpand(true)
+            .visible(false)
+            .build();
 
-        Self::populate_list_box(&list_box, &all_apps);
+        let list_overlay = gtk4::Overlay::new();
+        list_overlay.set_child(Some(&list_box));
+        list_overlay.add_overlay(&spinner);
 
-        scroll.set_child(Some(&list_box));
+        scroll.set_child(Some(&list_overlay));
         container.append(&scroll);
 
         popover.set_child(Some(&container));
 
-        let menu = Self {
+        let menu = Rc::new(Self {
             popover,
             list_box,
             search_entry,
-            all_apps,
-        };
+            spinner,
+            all_apps: Rc::new(RefCell::new(None)),
+            apps_loaded: Rc::new(Cell::new(false)),
+        });
 
         menu.connect_search();
+        menu.connect_popover_visibility();
+
         menu
     }
 
-    fn load_applications() -> Vec<(String, Option<gio::Icon>, String)> {
-        let mut apps: Vec<(String, Option<gio::Icon>, String)> = gio::AppInfo::all()
+    fn load_applications_async(self: Rc<Self>) {
+        self.spinner.set_visible(true);
+        self.spinner.start();
+        self.list_box.set_visible(false);
+
+        let list_box_clone = self.list_box.clone();
+        let spinner_clone = self.spinner.clone();
+        let all_apps_clone = self.all_apps.clone();
+        let apps_loaded_clone = self.apps_loaded.clone();
+        let search_entry_clone = self.search_entry.clone();
+        let self_clone = self.clone();
+
+        glib::MainContext::default().spawn_local(async move {
+            let app_data_result = tokio::task::spawn_blocking(Self::load_applications_sync).await;
+
+            match app_data_result {
+                Ok(app_data) => {
+                    let mut final_apps: Vec<AppInfoEntry> = Vec::with_capacity(app_data.len());
+                    for (name, icon_name_opt, exec) in app_data {
+                        let icon = icon_name_opt
+                            .and_then(|icon_name| gio::Icon::for_string(&icon_name).ok());
+                        final_apps.push((name, icon, exec));
+                    }
+
+                    *all_apps_clone.borrow_mut() = Some(final_apps);
+                    apps_loaded_clone.set(true);
+
+                    Self::populate_list_box_static(
+                        &self_clone,
+                        &list_box_clone,
+                        &all_apps_clone.borrow().as_ref().unwrap(),
+                    );
+                    Self::filter_applications_static(
+                        &self_clone,
+                        &list_box_clone,
+                        &all_apps_clone.borrow().as_ref().unwrap(),
+                        &search_entry_clone.text(),
+                    );
+                }
+                Err(e) => {
+                    eprintln!("Failed to load applications in background task: {}", e);
+                    *all_apps_clone.borrow_mut() = Some(Vec::new());
+                    apps_loaded_clone.set(true);
+                }
+            }
+
+            spinner_clone.stop();
+            spinner_clone.set_visible(false);
+            list_box_clone.set_visible(true);
+        });
+    }
+
+    fn load_applications_sync() -> Vec<AppInfoData> {
+        let mut apps: Vec<AppInfoData> = gio::AppInfo::all()
             .into_iter()
             .filter(gio::AppInfo::should_show)
             .filter_map(|app_info| {
                 let name = app_info.name().to_string();
-                let icon = app_info.icon();
+                let icon_name = app_info
+                    .icon()
+                    .and_then(|i| i.to_string())
+                    .map(|gs| gs.to_string());
                 let exec = app_info.commandline()?.to_string_lossy().into_owned();
 
                 if !name.is_empty() && !exec.is_empty() {
-                    Some((name, icon, exec))
+                    Some((name, icon_name, exec))
                 } else {
                     None
                 }
@@ -75,8 +148,13 @@ impl AppMenu {
         apps
     }
 
-    fn create_app_row(name: &str, icon: &Option<gio::Icon>, exec: &str) -> Button {
-        let row = Box::new(Orientation::Horizontal, 12);
+    fn create_app_row(
+        app_menu: &Rc<Self>,
+        name: &str,
+        icon: &Option<gio::Icon>,
+        exec: &str,
+    ) -> Button {
+        let row = GtkBox::new(Orientation::Horizontal, 12);
         row.add_css_class("app-menu-item-box");
 
         let image = match icon {
@@ -103,7 +181,11 @@ impl AppMenu {
 
         let exec = exec.to_string();
         let name = name.to_string();
+        let popover_weak = app_menu.popover.downgrade();
         button.connect_clicked(move |_| {
+            if let Some(popover) = popover_weak.upgrade() {
+                popover.popdown();
+            }
             match gio::AppInfo::create_from_commandline(
                 &exec,
                 Some(&name),
@@ -123,25 +205,47 @@ impl AppMenu {
         button
     }
 
-    fn populate_list_box(list_box: &ListBox, apps: &[(String, Option<gio::Icon>, String)]) {
+    fn populate_list_box_static(app_menu: &Rc<Self>, list_box: &ListBox, apps: &[AppInfoEntry]) {
+        while let Some(child) = list_box.first_child() {
+            list_box.remove(&child);
+        }
         for (name, icon, exec) in apps {
-            let row = Self::create_app_row(name, icon, exec);
+            let row = Self::create_app_row(app_menu, name, icon, exec);
             list_box.append(&row);
         }
     }
 
-    fn connect_search(&self) {
+    fn connect_popover_visibility(self: &Rc<Self>) {
+        let self_clone = self.clone();
+        self.popover.connect_visible_notify(move |popover| {
+            if popover.is_visible() && !self_clone.apps_loaded.get() {
+                self_clone.clone().load_applications_async();
+            }
+        });
+    }
+
+    fn connect_search(self: &Rc<Self>) {
         let list_box_clone = self.list_box.clone();
-        let apps_clone = self.all_apps.clone();
+        let apps_rc_clone = self.all_apps.clone();
+        let apps_loaded_clone = self.apps_loaded.clone();
+        let self_clone = self.clone();
+
         self.search_entry.connect_search_changed(move |entry| {
+            if !apps_loaded_clone.get() {
+                return;
+            }
             let text = entry.text();
-            Self::filter_applications_static(&list_box_clone, &apps_clone, &text);
+            let apps_borrow = apps_rc_clone.borrow();
+            if let Some(apps) = apps_borrow.as_ref() {
+                Self::filter_applications_static(&self_clone, &list_box_clone, apps, &text);
+            }
         });
     }
 
     fn filter_applications_static(
+        app_menu: &Rc<Self>,
         list_box: &ListBox,
-        apps: &[(String, Option<gio::Icon>, String)],
+        apps: &[AppInfoEntry],
         search: &str,
     ) {
         while let Some(child) = list_box.first_child() {
@@ -151,7 +255,7 @@ impl AppMenu {
         let search_lower = search.to_lowercase();
         for (name, icon, exec) in apps.iter() {
             if search_lower.is_empty() || name.to_lowercase().contains(&search_lower) {
-                let row = Self::create_app_row(name, icon, exec);
+                let row = Self::create_app_row(app_menu, name, icon, exec);
                 list_box.append(&row);
             }
         }
@@ -159,11 +263,5 @@ impl AppMenu {
 
     pub fn popover(&self) -> &Popover {
         &self.popover
-    }
-}
-
-impl Default for AppMenu {
-    fn default() -> Self {
-        Self::new()
     }
 }

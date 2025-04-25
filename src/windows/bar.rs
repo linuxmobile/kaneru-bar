@@ -5,13 +5,16 @@ use chrono::Local;
 use glib::source::timeout_add_local;
 use glib::ControlFlow;
 use gtk4::prelude::*;
-use gtk4::{Application, ApplicationWindow, Box as GtkBox, Button, Label, MenuButton, Orientation};
+use gtk4::{
+    glib, Application, ApplicationWindow, Box as GtkBox, Button, Label, MenuButton, Orientation,
+};
 use gtk4_layer_shell::{Edge, Layer, LayerShell};
-use std::time::Duration;
+use std::{rc::Rc, time::Duration};
 
 pub struct BarWindow {
     window: ApplicationWindow,
     _date_popover_provider: DateWindow,
+    _app_menu: Option<Rc<AppMenu>>,
 }
 
 impl BarWindow {
@@ -37,8 +40,8 @@ impl BarWindow {
         right_box.set_halign(gtk4::Align::End);
         right_box.add_css_class("right-box");
 
-        let mut app_menu_instance: Option<AppMenu> = None;
-        let mut app_menu_button: Option<MenuButton> = None;
+        let mut app_menu_instance: Option<Rc<AppMenu>> = None;
+
         let fmt = config
             .clock_format
             .clone()
@@ -64,9 +67,11 @@ impl BarWindow {
                     })
                     .unwrap_or_else(|| "open-menu-symbolic".to_string());
                 btn.set_icon_name(&icon);
+
                 let menu = AppMenu::new();
+                btn.set_popover(Some(menu.popover()));
                 app_menu_instance = Some(menu);
-                app_menu_button = Some(btn.clone());
+
                 target.append(&btn);
             }
             ModuleType::ActiveClient => {
@@ -119,10 +124,6 @@ impl BarWindow {
             add_module(m, &right_box);
         }
 
-        if let (Some(btn), Some(menu)) = (&app_menu_button, &app_menu_instance) {
-            btn.set_popover(Some(menu.popover()));
-        }
-
         container.append(&left_box);
         container.append(&center_box);
         container.append(&right_box);
@@ -131,6 +132,7 @@ impl BarWindow {
         BarWindow {
             window,
             _date_popover_provider: date_window_instance,
+            _app_menu: app_menu_instance,
         }
     }
 

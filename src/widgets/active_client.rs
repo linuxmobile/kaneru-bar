@@ -1,4 +1,4 @@
-use crate::utils::niri;
+use crate::utils::niri::{self, NiriError, Window};
 use glib;
 use gtk4::prelude::*;
 use gtk4::{Align, Box, Label, Orientation, Widget};
@@ -50,8 +50,8 @@ impl ActiveClientWidget {
         widget
     }
 
-    fn update_widget_info(&self) {
-        match niri::get_focused_window() {
+    fn update_labels(&self, window_info: Result<Option<Window>, NiriError>) {
+        match window_info {
             Ok(Some(window)) => {
                 self.app_id_label
                     .set_text(&window.app_id.unwrap_or_default());
@@ -63,8 +63,7 @@ impl ActiveClientWidget {
                 self.title_label.set_text("Desktop");
                 self.container.set_visible(true);
             }
-            Err(e) => {
-                eprintln!("Failed to get focused window info: {:?}", e);
+            Err(_e) => {
                 self.app_id_label.set_text("");
                 self.title_label.set_text("Error");
                 self.container.set_visible(false);
@@ -72,31 +71,38 @@ impl ActiveClientWidget {
         }
     }
 
+    fn update_widget_info(&self) {
+        let window_info = niri::get_focused_window();
+        self.update_labels(window_info);
+    }
+
     fn schedule_update(&self) {
-        glib::timeout_add_local(
-            UPDATE_INTERVAL,
-            glib::clone!(@weak self.container as container, @weak self.app_id_label as app_id_label, @weak self.title_label as title_label => @default-return glib::ControlFlow::Break, move || {
-                match niri::get_focused_window() {
-                    Ok(Some(window)) => {
-                        app_id_label.set_text(&window.app_id.unwrap_or_default());
-                        title_label.set_text(&window.title.unwrap_or_default());
-                        container.set_visible(true);
-                    }
-                    Ok(None) => {
-                        app_id_label.set_text("niri");
-                        title_label.set_text("Desktop");
-                        container.set_visible(true);
-                    }
-                    Err(e) => {
-                        eprintln!("Failed to get focused window info during update: {:?}", e);
-                        app_id_label.set_text("");
-                        title_label.set_text("Error");
-                        container.set_visible(false);
-                    }
+        let container = self.container.clone();
+        let app_id_label = self.app_id_label.clone();
+        let title_label = self.title_label.clone();
+
+        glib::timeout_add_local(UPDATE_INTERVAL, move || {
+            let update_result = niri::get_focused_window();
+
+            match update_result {
+                Ok(Some(window)) => {
+                    app_id_label.set_text(&window.app_id.unwrap_or_default());
+                    title_label.set_text(&window.title.unwrap_or_default());
+                    container.set_visible(true);
                 }
-                glib::ControlFlow::Continue
-            }),
-        );
+                Ok(None) => {
+                    app_id_label.set_text("niri");
+                    title_label.set_text("Desktop");
+                    container.set_visible(true);
+                }
+                Err(_e) => {
+                    app_id_label.set_text("");
+                    title_label.set_text("Error");
+                    container.set_visible(false);
+                }
+            }
+            glib::ControlFlow::Continue
+        });
     }
 
     pub fn widget(&self) -> &impl IsA<Widget> {
