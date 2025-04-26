@@ -1,4 +1,4 @@
-use crate::utils::{get_distro_icon_name, BarConfig, ModuleType};
+use crate::utils::{config::BatteryConfig, get_distro_icon_name, BarConfig, ModuleType};
 use crate::widgets::{ActiveClientWidget, BatteryWidget};
 use crate::windows::{AppMenu, BatteryWindow, DateWindow};
 use chrono::Local;
@@ -56,7 +56,8 @@ impl BarWindow {
         let config_clone = config.clone();
         let window_weak = window.downgrade();
 
-        let mut add_module = |m: &ModuleType, target: &GtkBox| match m {
+        let mut add_module = |m: &ModuleType, target: &GtkBox, battery_cfg: &BatteryConfig| match m
+        {
             ModuleType::AppMenu => {
                 let btn = MenuButton::new();
                 btn.add_css_class("app-menu-button");
@@ -135,7 +136,7 @@ impl BarWindow {
                 let battery_widget = BatteryWidget::new();
                 let battery_button = battery_widget.widget();
 
-                let bw_instance = BatteryWindow::new(&config_clone);
+                let bw_instance = BatteryWindow::new(battery_cfg);
                 let battery_popover = bw_instance.popover().clone();
                 battery_popover.set_parent(battery_button);
 
@@ -150,13 +151,13 @@ impl BarWindow {
         };
 
         for m in &config.modules_left {
-            add_module(m, &left_box);
+            add_module(m, &left_box, &config.battery);
         }
         for m in &config.modules_center {
-            add_module(m, &center_box);
+            add_module(m, &center_box, &config.battery);
         }
         for m in &config.modules_right {
-            add_module(m, &right_box);
+            add_module(m, &right_box, &config.battery);
         }
 
         container.append(&left_box);

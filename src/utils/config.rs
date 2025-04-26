@@ -21,6 +21,27 @@ pub enum NotificationPosition {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(default)]
+pub struct BatteryConfig {
+    pub show_details: bool,
+    pub show_power_profiles: bool,
+    pub show_conservation_mode: bool,
+    #[serde(rename = "conservation-mode-path")]
+    pub conservation_mode_path: Option<PathBuf>,
+}
+
+impl Default for BatteryConfig {
+    fn default() -> Self {
+        Self {
+            show_details: true,
+            show_power_profiles: true,
+            show_conservation_mode: true,
+            conservation_mode_path: None,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(default)]
 pub struct BarConfig {
     pub font: Option<String>,
     pub modules_left: Vec<ModuleType>,
@@ -29,6 +50,7 @@ pub struct BarConfig {
     pub distro_icon_override: Option<String>,
     pub clock_format: Option<String>,
     pub notification_position: NotificationPosition,
+    pub battery: BatteryConfig,
 }
 
 impl Default for BarConfig {
@@ -41,6 +63,7 @@ impl Default for BarConfig {
             distro_icon_override: None,
             clock_format: Some("%A %e, %H:%M".to_string()),
             notification_position: NotificationPosition::TopRight,
+            battery: BatteryConfig::default(),
         }
     }
 }

@@ -1,6 +1,4 @@
-use crate::utils::battery::{
-    format_charge_status, BatteryDetails, BatteryService, BatteryUtilError,
-};
+use crate::utils::battery::{BatteryDetails, BatteryService, BatteryUtilError};
 use gtk4::prelude::*;
 use gtk4::{glib, Align, Box as GtkBox, Button, Image, Label, Orientation};
 use std::{cell::RefCell, rc::Rc, time::Duration};
@@ -88,17 +86,13 @@ impl BatteryWidget {
                 let percentage_text = format!("{:.0}%", info.percentage.unwrap_or(0.0));
                 self.label.set_text(&percentage_text);
                 self.container.set_visible(true);
-
-                let status_text = format_charge_status(&info);
-                let tooltip = format!("{} - {}", percentage_text, status_text);
-                self.container.set_tooltip_text(Some(&tooltip));
+                self.container.set_tooltip_text(None);
             }
             Err(e) => {
                 self.icon.set_icon_name(Some("battery-missing-symbolic"));
                 self.label.set_text("");
                 self.container.set_visible(true);
-                self.container
-                    .set_tooltip_text(Some("Error reading battery"));
+                self.container.set_tooltip_text(None);
                 if matches!(e, BatteryUtilError::NoBatteryFound) {
                     self.container.set_visible(false);
                 }
@@ -128,16 +122,13 @@ impl BatteryWidget {
                     let percentage_text = format!("{:.0}%", info.percentage.unwrap_or(0.0));
                     label_clone.set_text(&percentage_text);
                     container_clone.set_visible(true);
-
-                    let status_text = format_charge_status(&info);
-                    let tooltip = format!("{} - {}", percentage_text, status_text);
-                    container_clone.set_tooltip_text(Some(&tooltip));
+                    container_clone.set_tooltip_text(None);
                 }
                 Err(e) => {
                     icon_clone.set_icon_name(Some("battery-missing-symbolic"));
                     label_clone.set_text("");
                     container_clone.set_visible(true);
-                    container_clone.set_tooltip_text(Some("Error reading battery"));
+                    container_clone.set_tooltip_text(None);
                     if matches!(e, BatteryUtilError::NoBatteryFound) {
                         container_clone.set_visible(false);
                     }

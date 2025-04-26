@@ -2,18 +2,20 @@ use crate::utils::{
     battery::{
         format_charge_status, get_active_power_profile, get_available_power_profiles,
         get_conservation_mode, set_conservation_mode, set_power_profile, BatteryDetails,
-        BatteryService, BatteryUtilError, PowerProfile,
+        BatteryService, PowerProfile,
     },
-    BarConfig,
+    config::BatteryConfig,
 };
 use battery::State;
 use gtk4::prelude::*;
 use gtk4::{glib, Align, Box as GtkBox, Button, Image, Label, Orientation, Popover};
-use std::{cell::RefCell, rc::Rc, time::Duration};
+use std::{cell::RefCell, path::PathBuf, rc::Rc, time::Duration};
 
 const REFRESH_INTERVAL_WINDOW: Duration = Duration::from_secs(5);
 
 struct BatteryWindowUI {
+    details_container: GtkBox,
+    power_profile_section: GtkBox,
     main_icon: Image,
     percentage_label: Label,
     status_label: Label,
@@ -28,6 +30,7 @@ struct BatteryWindowUI {
 
 pub struct BatteryWindow {
     popover: Popover,
+    config: BatteryConfig,
     service: Rc<RefCell<BatteryService>>,
     details: Rc<RefCell<Option<BatteryDetails>>>,
     active_profile: Rc<RefCell<Option<PowerProfile>>>,
@@ -37,7 +40,7 @@ pub struct BatteryWindow {
 }
 
 impl BatteryWindow {
-    pub fn new(_config: &BarConfig) -> Rc<Self> {
+    pub fn new(config: &BatteryConfig) -> Rc<Self> {
         let popover = Popover::new();
         popover.add_css_class("BatteryWindow");
         popover.set_autohide(true);
@@ -53,6 +56,7 @@ impl BatteryWindow {
 
         let window = Rc::new(Self {
             popover: popover.clone(),
+            config: config.clone(),
             service,
             details: details.clone(),
             active_profile: active_profile.clone(),
@@ -72,14 +76,20 @@ impl BatteryWindow {
 
         let (details_container, health_label, cycles_label, power_draw_label, voltage_label) =
             Self::build_details_section();
+        details_container.set_visible(config.show_details);
         main_box.append(&details_container);
 
         let (power_profile_section, power_profile_buttons_box) =
             Self::build_power_profile_section();
+        power_profile_section.set_visible(config.show_power_profiles);
         main_box.append(&power_profile_section);
 
         let (conservation_section, conservation_mode_button, conservation_mode_status_icon) =
             Self::build_conservation_mode_section(window.clone());
+
+        let conservation_should_be_visible =
+            config.show_conservation_mode && config.conservation_mode_path.is_some();
+        conservation_section.set_visible(conservation_should_be_visible);
         main_box.append(&conservation_section);
 
         let settings_section = Self::build_settings_section(popover.clone());
@@ -88,6 +98,8 @@ impl BatteryWindow {
         popover.set_child(Some(&main_box));
 
         *ui_elements.borrow_mut() = Some(BatteryWindowUI {
+            details_container,
+            power_profile_section,
             main_icon,
             percentage_label,
             status_label,
@@ -269,16 +281,26 @@ impl BatteryWindow {
         let window_clone = window_rc.clone();
         let status_icon_clone = status_icon.clone();
         button.connect_clicked(move |btn| {
+            let conservation_path = window_clone.config.conservation_mode_path.clone();
+            let Some(path) = conservation_path else {
+                eprintln!("Conservation mode path not configured.");
+                return;
+            };
+
             let current_state = window_clone.conservation_mode.borrow().unwrap_or(false);
             let new_state = !current_state;
-            match set_conservation_mode(new_state) {
+            match set_conservation_mode(new_state, &path) {
                 Ok(_) => {
-                    window_clone.update_conservation_mode_data();
+                    *window_clone.conservation_mode.borrow_mut() = Some(new_state);
                     Self::update_conservation_button_style(btn, new_state, &status_icon_clone);
+                    btn.set_sensitive(true);
                     window_clone.update_ui();
                 }
                 Err(e) => {
                     eprintln!("Failed to set conservation mode: {}", e);
+                    *window_clone.conservation_mode.borrow_mut() = None;
+                    btn.set_sensitive(false);
+                    Self::update_conservation_button_style(btn, false, &status_icon_clone);
                 }
             }
         });
@@ -326,8 +348,12 @@ impl BatteryWindow {
 
     fn update_all_data(self: &Rc<Self>) {
         self.update_battery_details();
-        self.update_power_profile_data();
-        self.update_conservation_mode_data();
+        if self.config.show_power_profiles {
+            self.update_power_profile_data();
+        }
+        if self.config.show_conservation_mode && self.config.conservation_mode_path.is_some() {
+            self.update_conservation_mode_data();
+        }
         self.update_ui();
     }
 
@@ -352,22 +378,19 @@ impl BatteryWindow {
     }
 
     fn update_conservation_mode_data(self: &Rc<Self>) {
-        match get_conservation_mode() {
-            Ok(b) => *self.conservation_mode.borrow_mut() = Some(b),
-            Err(BatteryUtilError::SysfsNotFound(_))
-            | Err(BatteryUtilError::PermissionDenied(_)) => {
-                *self.conservation_mode.borrow_mut() = None;
-                if let Some(ui) = self.ui_elements.borrow().as_ref() {
-                    if let Some(parent) = ui.conservation_mode_button.parent() {
-                        if let Some(section) = parent.parent() {
-                            section.set_visible(false);
-                        }
-                    }
-                }
+        let conservation_path: Option<PathBuf> = self.config.conservation_mode_path.clone();
+        let Some(path) = conservation_path else {
+            *self.conservation_mode.borrow_mut() = None;
+            return;
+        };
+
+        match get_conservation_mode(&path) {
+            Ok(b) => {
+                *self.conservation_mode.borrow_mut() = Some(b);
             }
             Err(e) => {
-                eprintln!("Failed to get conservation mode: {}", e);
-                *self.conservation_mode.borrow_mut() = Some(false);
+                eprintln!("Failed to get conservation mode state: {}", e);
+                *self.conservation_mode.borrow_mut() = None;
             }
         }
     }
@@ -380,7 +403,7 @@ impl BatteryWindow {
         };
         let details_opt = self.details.borrow();
         let details = details_opt.as_ref();
-        let conservation_mode_enabled = self.conservation_mode.borrow().unwrap_or(false);
+        let conservation_mode_state = self.conservation_mode.borrow();
 
         if let Some(d) = details {
             ui.main_icon.set_icon_name(Some(
@@ -390,51 +413,62 @@ impl BatteryWindow {
                 .set_label(&format!("Battery {:.0}%", d.percentage.unwrap_or(0.0)));
 
             let mut status_text = format_charge_status(d);
-            if conservation_mode_enabled
+            if conservation_mode_state.unwrap_or(false)
                 && (d.state == Some(State::Full) || d.state == Some(State::Unknown))
             {
                 status_text = "Conservation Mode".to_string();
             }
             ui.status_label.set_label(&status_text);
 
-            ui.health_label
-                .set_label(&format!("{:.0}%", d.health_percentage.unwrap_or(0.0)));
-            ui.cycles_label
-                .set_label(&d.cycle_count.map_or("N/A".to_string(), |c| c.to_string()));
-            ui.power_draw_label
-                .set_label(&format!("{:.1} W", d.energy_rate_watts.unwrap_or(0.0)));
-            ui.voltage_label
-                .set_label(&format!("{:.1} V", d.voltage_volts.unwrap_or(0.0)));
+            ui.details_container.set_visible(self.config.show_details);
+            if self.config.show_details {
+                ui.health_label
+                    .set_label(&format!("{:.0}%", d.health_percentage.unwrap_or(0.0)));
+                ui.cycles_label
+                    .set_label(&d.cycle_count.map_or("N/A".to_string(), |c| c.to_string()));
+                ui.power_draw_label
+                    .set_label(&format!("{:.1} W", d.energy_rate_watts.unwrap_or(0.0)));
+                ui.voltage_label
+                    .set_label(&format!("{:.1} V", d.voltage_volts.unwrap_or(0.0)));
+            }
         } else {
             ui.main_icon.set_icon_name(Some("battery-missing-symbolic"));
             ui.percentage_label.set_label("Battery N/A");
             ui.status_label.set_label("State N/A");
-            ui.health_label.set_label("N/A");
-            ui.cycles_label.set_label("N/A");
-            ui.power_draw_label.set_label("N/A");
-            ui.voltage_label.set_label("N/A");
+            ui.details_container.set_visible(self.config.show_details);
+            if self.config.show_details {
+                ui.health_label.set_label("N/A");
+                ui.cycles_label.set_label("N/A");
+                ui.power_draw_label.set_label("N/A");
+                ui.voltage_label.set_label("N/A");
+            }
         }
 
-        let active_profile_opt = self.active_profile.borrow();
-        let active_p = active_profile_opt.as_ref();
+        ui.power_profile_section
+            .set_visible(self.config.show_power_profiles);
+        if self.config.show_power_profiles {
+            let active_profile_opt = self.active_profile.borrow();
+            let active_p = active_profile_opt.as_ref();
+            Self::rebuild_power_profile_buttons(self, &ui.power_profile_buttons_box, active_p);
+        }
 
-        Self::rebuild_power_profile_buttons(self, &ui.power_profile_buttons_box, active_p);
-
-        if let Some(enabled) = self.conservation_mode.borrow().as_ref() {
-            if let Some(parent) = ui.conservation_mode_button.parent() {
-                if let Some(section) = parent.parent() {
-                    section.set_visible(true);
+        if self.config.show_conservation_mode && self.config.conservation_mode_path.is_some() {
+            match *conservation_mode_state {
+                Some(enabled) => {
+                    ui.conservation_mode_button.set_sensitive(true);
+                    Self::update_conservation_button_style(
+                        &ui.conservation_mode_button,
+                        enabled,
+                        &ui.conservation_mode_status_icon,
+                    );
                 }
-            }
-            Self::update_conservation_button_style(
-                &ui.conservation_mode_button,
-                *enabled,
-                &ui.conservation_mode_status_icon,
-            );
-        } else {
-            if let Some(parent) = ui.conservation_mode_button.parent() {
-                if let Some(section) = parent.parent() {
-                    section.set_visible(false);
+                None => {
+                    ui.conservation_mode_button.set_sensitive(false);
+                    Self::update_conservation_button_style(
+                        &ui.conservation_mode_button,
+                        false,
+                        &ui.conservation_mode_status_icon,
+                    );
                 }
             }
         }

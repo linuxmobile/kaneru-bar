@@ -9,14 +9,11 @@ use std::{
     collections::HashSet,
     error::Error,
     fmt, fs, io,
-    path::Path,
+    path::{Path, PathBuf},
     process::{Command, Output, Stdio},
     str::FromStr,
     time::Duration,
 };
-
-const CONSERVATION_MODE_PATH: &str =
-    "/sys/devices/pci0000:00/0000:00:14.3/PNP0C09:00/VPC2004:00/conservation_mode";
 
 #[derive(Debug)]
 pub enum BatteryUtilError {
@@ -26,8 +23,8 @@ pub enum BatteryUtilError {
     CommandNotFound(String, io::Error),
     CommandFailed(String, String),
     ParseError(String),
-    SysfsNotFound(String),
-    PermissionDenied(String),
+    SysfsNotFound(PathBuf),
+    PermissionDenied(PathBuf),
     Utf8Error(std::string::FromUtf8Error),
 }
 
@@ -44,9 +41,11 @@ impl fmt::Display for BatteryUtilError {
                 write!(f, "Command failed '{}': {}", cmd, stderr)
             }
             BatteryUtilError::ParseError(s) => write!(f, "Parse error: {}", s),
-            BatteryUtilError::SysfsNotFound(path) => write!(f, "Sysfs path not found: {}", path),
+            BatteryUtilError::SysfsNotFound(path) => {
+                write!(f, "Sysfs path not found: {}", path.display())
+            }
             BatteryUtilError::PermissionDenied(path) => {
-                write!(f, "Permission denied for path: {}", path)
+                write!(f, "Permission denied for path: {}", path.display())
             }
             BatteryUtilError::Utf8Error(e) => write!(f, "UTF8 conversion error: {}", e),
         }
@@ -305,12 +304,9 @@ pub fn get_available_power_profiles() -> Result<Vec<PowerProfile>, BatteryUtilEr
     Ok(profiles)
 }
 
-pub fn get_conservation_mode() -> Result<bool, BatteryUtilError> {
-    let path = Path::new(CONSERVATION_MODE_PATH);
+pub fn get_conservation_mode(path: &Path) -> Result<bool, BatteryUtilError> {
     if !path.exists() {
-        return Err(BatteryUtilError::SysfsNotFound(
-            CONSERVATION_MODE_PATH.to_string(),
-        ));
+        return Err(BatteryUtilError::SysfsNotFound(path.to_path_buf()));
     }
     match fs::read_to_string(path) {
         Ok(content) => match content.trim().parse::<u8>() {
@@ -318,19 +314,20 @@ pub fn get_conservation_mode() -> Result<bool, BatteryUtilError> {
             Ok(0) => Ok(false),
             _ => Err(BatteryUtilError::ParseError(format!(
                 "Unexpected content in {}: {}",
-                CONSERVATION_MODE_PATH, content
+                path.display(),
+                content
             ))),
         },
-        Err(e) if e.kind() == io::ErrorKind::PermissionDenied => Err(
-            BatteryUtilError::PermissionDenied(CONSERVATION_MODE_PATH.to_string()),
-        ),
+        Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
+            Err(BatteryUtilError::PermissionDenied(path.to_path_buf()))
+        }
         Err(e) => Err(BatteryUtilError::Io(e)),
     }
 }
 
-pub fn set_conservation_mode(enabled: bool) -> Result<(), BatteryUtilError> {
+pub fn set_conservation_mode(enabled: bool, path: &Path) -> Result<(), BatteryUtilError> {
     let value = if enabled { "1" } else { "0" };
-    let command_str = format!("echo {} > {}", value, CONSERVATION_MODE_PATH);
+    let command_str = format!("echo {} > {}", value, path.display());
 
     let output = Command::new("sudo")
         .args(["-n", "sh", "-c", &command_str])
