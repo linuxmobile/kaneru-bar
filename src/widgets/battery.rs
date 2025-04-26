@@ -1,24 +1,20 @@
-use crate::utils::battery::{BatteryDetails, BatteryService, BatteryUtilError};
+use crate::utils::battery::{BatteryService, BatteryUtilError};
 use gtk4::prelude::*;
 use gtk4::{glib, Align, Box as GtkBox, Button, Image, Label, Orientation};
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
 const REFRESH_INTERVAL: Duration = Duration::from_secs(15);
 
-struct BatteryState {
-    service: Option<BatteryService>,
-}
-
 pub struct BatteryWidget {
     container: Button,
     icon: Image,
     label: Label,
-    state: Rc<RefCell<BatteryState>>,
-    _update_source_id: Option<glib::SourceId>,
+    _service: Rc<RefCell<BatteryService>>,
+    _update_source_id: RefCell<Option<glib::SourceId>>,
 }
 
 impl BatteryWidget {
-    pub fn new() -> Self {
+    pub fn new(service: Rc<RefCell<BatteryService>>) -> Rc<Self> {
         let icon = Image::builder().build();
         icon.add_css_class("battery-icon");
         let label = Label::new(None);
@@ -37,106 +33,66 @@ impl BatteryWidget {
             .build();
         container.add_css_class("battery-button");
 
-        let initial_state = Self::initialize_battery_state();
-        let state_rc = Rc::new(RefCell::new(initial_state));
-
-        let mut widget = Self {
+        let widget = Rc::new(Self {
             container,
             icon,
             label,
-            state: state_rc,
-            _update_source_id: None,
-        };
+            _service: service.clone(),
+            _update_source_id: RefCell::new(None),
+        });
 
-        widget.update_widget();
-        widget.schedule_update();
+        let widget_clone = widget.clone();
+        widget.container.connect_destroy(move |_| {
+            let _ = &widget_clone;
+        });
 
-        widget
-    }
+        let weak_self = Rc::downgrade(&widget);
+        let service_clone = service;
 
-    fn initialize_battery_state() -> BatteryState {
-        match BatteryService::new() {
-            Ok(service) => BatteryState {
-                service: Some(service),
-            },
-            Err(e) => {
-                eprintln!("Failed to create battery service: {}", e);
-                BatteryState { service: None }
-            }
-        }
-    }
+        let update_ui = move |strong_self: &BatteryWidget| {
+            let result = {
+                let mut service_borrow = service_clone.borrow_mut();
+                service_borrow.get_primary_battery_details()
+            };
 
-    fn get_battery_info(state: &mut BatteryState) -> Result<BatteryDetails, BatteryUtilError> {
-        let service = state
-            .service
-            .as_mut()
-            .ok_or(BatteryUtilError::NoBatteryFound)?;
-        service.get_primary_battery_details()
-    }
-
-    fn update_widget_internal(&self, _context: &str) {
-        let mut state = self.state.borrow_mut();
-        match Self::get_battery_info(&mut state) {
-            Ok(info) => {
-                let icon_name = info
-                    .icon_name
-                    .as_deref()
-                    .unwrap_or("battery-missing-symbolic");
-                self.icon.set_icon_name(Some(icon_name));
-                let percentage_text = format!("{:.0}%", info.percentage.unwrap_or(0.0));
-                self.label.set_text(&percentage_text);
-                self.container.set_visible(true);
-                self.container.set_tooltip_text(None);
-            }
-            Err(e) => {
-                self.icon.set_icon_name(Some("battery-missing-symbolic"));
-                self.label.set_text("");
-                self.container.set_visible(true);
-                self.container.set_tooltip_text(None);
-                if matches!(e, BatteryUtilError::NoBatteryFound) {
-                    self.container.set_visible(false);
-                }
-            }
-        }
-    }
-
-    fn update_widget(&self) {
-        self.update_widget_internal("Initial Update");
-    }
-
-    fn schedule_update(&mut self) {
-        let state_clone = self.state.clone();
-        let container_clone = self.container.clone();
-        let icon_clone = self.icon.clone();
-        let label_clone = self.label.clone();
-
-        let source_id = glib::timeout_add_local(REFRESH_INTERVAL, move || {
-            let mut state = state_clone.borrow_mut();
-            match Self::get_battery_info(&mut state) {
+            match result {
                 Ok(info) => {
                     let icon_name = info
                         .icon_name
                         .as_deref()
                         .unwrap_or("battery-missing-symbolic");
-                    icon_clone.set_icon_name(Some(icon_name));
+                    strong_self.icon.set_icon_name(Some(icon_name));
                     let percentage_text = format!("{:.0}%", info.percentage.unwrap_or(0.0));
-                    label_clone.set_text(&percentage_text);
-                    container_clone.set_visible(true);
-                    container_clone.set_tooltip_text(None);
+                    strong_self.label.set_text(&percentage_text);
+                    strong_self.container.set_visible(true);
                 }
                 Err(e) => {
-                    icon_clone.set_icon_name(Some("battery-missing-symbolic"));
-                    label_clone.set_text("");
-                    container_clone.set_visible(true);
-                    container_clone.set_tooltip_text(None);
+                    strong_self
+                        .icon
+                        .set_icon_name(Some("battery-missing-symbolic"));
+                    strong_self.label.set_text("");
+                    strong_self.container.set_visible(true);
                     if matches!(e, BatteryUtilError::NoBatteryFound) {
-                        container_clone.set_visible(false);
+                        strong_self.container.set_visible(false);
                     }
                 }
             }
-            glib::ControlFlow::Continue
-        });
-        self._update_source_id = Some(source_id);
+            strong_self.container.queue_draw();
+        };
+
+        update_ui(&widget);
+
+        let source_id =
+            glib::timeout_add_local(REFRESH_INTERVAL, move || match weak_self.upgrade() {
+                Some(strong_self) => {
+                    update_ui(&strong_self);
+                    glib::ControlFlow::Continue
+                }
+                None => glib::ControlFlow::Break,
+            });
+        *widget._update_source_id.borrow_mut() = Some(source_id);
+
+        widget
     }
 
     pub fn widget(&self) -> &Button {
@@ -146,13 +102,13 @@ impl BatteryWidget {
 
 impl Default for BatteryWidget {
     fn default() -> Self {
-        Self::new()
+        panic!("BatteryWidget::default() is not supported. Use BatteryWidget::new(service).");
     }
 }
 
 impl Drop for BatteryWidget {
     fn drop(&mut self) {
-        if let Some(source_id) = self._update_source_id.take() {
+        if let Some(source_id) = self._update_source_id.borrow_mut().take() {
             source_id.remove();
         }
     }

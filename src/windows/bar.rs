@@ -1,4 +1,6 @@
-use crate::utils::{config::BatteryConfig, get_distro_icon_name, BarConfig, ModuleType};
+use crate::utils::{
+    battery::BatteryService, config::BatteryConfig, get_distro_icon_name, BarConfig, ModuleType,
+};
 use crate::widgets::{ActiveClientWidget, BatteryWidget};
 use crate::windows::{AppMenu, BatteryWindow, DateWindow};
 use chrono::Local;
@@ -9,7 +11,7 @@ use gtk4::{
     glib, Application, ApplicationWindow, Box as GtkBox, Button, Label, MenuButton, Orientation,
 };
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
-use std::{rc::Rc, time::Duration};
+use std::{cell::RefCell, rc::Rc, time::Duration};
 
 pub struct BarWindow {
     window: ApplicationWindow,
@@ -20,6 +22,10 @@ pub struct BarWindow {
 
 impl BarWindow {
     pub fn new(app: &Application, config: &BarConfig) -> Self {
+        let battery_service = Rc::new(RefCell::new(
+            BatteryService::new().expect("Failed to initialize shared BatteryService"),
+        ));
+
         let window = ApplicationWindow::builder().application(app).build();
         window.add_css_class("Bar");
         window.init_layer_shell();
@@ -53,100 +59,103 @@ impl BarWindow {
         let date_window_instance = DateWindow::new(config);
         let date_popover = date_window_instance.popover().clone();
 
-        let config_clone = config.clone();
+        let battery_service_clone = battery_service.clone();
+        let config_clone_app_menu = config.clone();
         let window_weak = window.downgrade();
 
-        let mut add_module = |m: &ModuleType, target: &GtkBox, battery_cfg: &BatteryConfig| match m
-        {
-            ModuleType::AppMenu => {
-                let btn = MenuButton::new();
-                btn.add_css_class("app-menu-button");
-                let icon = config_clone
-                    .distro_icon_override
-                    .clone()
-                    .or_else(|| {
-                        get_distro_icon_name()
-                            .ok()
-                            .flatten()
-                            .or(Some("distributor-logo".to_string()))
-                    })
-                    .unwrap_or_else(|| "open-menu-symbolic".to_string());
-                btn.set_icon_name(&icon);
+        let mut add_module = |m: &ModuleType, target: &GtkBox, battery_cfg: &BatteryConfig| {
+            let battery_service_for_module = battery_service_clone.clone();
+            match m {
+                ModuleType::AppMenu => {
+                    let btn = MenuButton::new();
+                    btn.add_css_class("app-menu-button");
+                    let icon = config_clone_app_menu
+                        .distro_icon_override
+                        .clone()
+                        .or_else(|| {
+                            get_distro_icon_name()
+                                .ok()
+                                .flatten()
+                                .or(Some("distributor-logo".to_string()))
+                        })
+                        .unwrap_or_else(|| "open-menu-symbolic".to_string());
+                    btn.set_icon_name(&icon);
 
-                let menu = AppMenu::new();
-                btn.set_popover(Some(menu.popover()));
+                    let menu = AppMenu::new();
+                    btn.set_popover(Some(menu.popover()));
 
-                let popover = menu.popover().clone();
-                let window_weak_clone_show = window_weak.clone();
-                popover.connect_show(move |_| {
-                    if let Some(window) = window_weak_clone_show.upgrade() {
-                        window.set_keyboard_mode(KeyboardMode::Exclusive);
-                    }
-                });
+                    let popover = menu.popover().clone();
+                    let window_weak_clone_show = window_weak.clone();
+                    popover.connect_show(move |_| {
+                        if let Some(window) = window_weak_clone_show.upgrade() {
+                            window.set_keyboard_mode(KeyboardMode::Exclusive);
+                        }
+                    });
 
-                let window_weak_clone_closed = window_weak.clone();
-                popover.connect_closed(move |_| {
-                    if let Some(window) = window_weak_clone_closed.upgrade() {
-                        window.set_keyboard_mode(KeyboardMode::None);
-                    }
-                });
+                    let window_weak_clone_closed = window_weak.clone();
+                    popover.connect_closed(move |_| {
+                        if let Some(window) = window_weak_clone_closed.upgrade() {
+                            window.set_keyboard_mode(KeyboardMode::None);
+                        }
+                    });
 
-                app_menu_instance = Some(menu);
-                target.append(&btn);
-            }
-            ModuleType::ActiveClient => {
-                let w = ActiveClientWidget::new();
-                target.append(w.widget());
-            }
-            ModuleType::Clock => {
-                let clock_button = Button::new();
-                clock_button.add_css_class("clock-button");
+                    app_menu_instance = Some(menu);
+                    target.append(&btn);
+                }
+                ModuleType::ActiveClient => {
+                    let w = ActiveClientWidget::new();
+                    target.append(w.widget());
+                }
+                ModuleType::Clock => {
+                    let clock_button = Button::new();
+                    clock_button.add_css_class("clock-button");
 
-                let lbl = Label::new(None);
-                let now = Local::now();
-                lbl.set_text(&now.format(&fmt).to_string());
-                clock_button.set_child(Some(&lbl));
-
-                let lbl_clone = lbl.clone();
-                let fmt_clone = fmt.clone();
-                let update_interval = if fmt_clone.contains("%S") {
-                    Duration::from_secs(1)
-                } else {
-                    Duration::from_secs(30)
-                };
-
-                timeout_add_local(update_interval, move || {
+                    let lbl = Label::new(None);
                     let now = Local::now();
-                    let time_str = now.format(&fmt_clone).to_string();
-                    lbl_clone.set_label(&time_str);
-                    ControlFlow::Continue
-                });
+                    lbl.set_text(&now.format(&fmt).to_string());
+                    clock_button.set_child(Some(&lbl));
 
-                let popover_clone = date_popover.clone();
-                popover_clone.set_parent(&clock_button);
+                    let lbl_clone = lbl.clone();
+                    let fmt_clone = fmt.clone();
+                    let update_interval = if fmt_clone.contains("%S") {
+                        Duration::from_secs(1)
+                    } else {
+                        Duration::from_secs(30)
+                    };
 
-                clock_button.connect_clicked(move |button| {
-                    popover_clone.set_pointing_to(Some(&button.allocation()));
-                    popover_clone.popup();
-                });
+                    timeout_add_local(update_interval, move || {
+                        let now = Local::now();
+                        let time_str = now.format(&fmt_clone).to_string();
+                        lbl_clone.set_label(&time_str);
+                        ControlFlow::Continue
+                    });
 
-                target.append(&clock_button);
-            }
-            ModuleType::Battery => {
-                let battery_widget = BatteryWidget::new();
-                let battery_button = battery_widget.widget();
+                    let popover_clone = date_popover.clone();
+                    popover_clone.set_parent(&clock_button);
 
-                let bw_instance = BatteryWindow::new(battery_cfg);
-                let battery_popover = bw_instance.popover().clone();
-                battery_popover.set_parent(battery_button);
+                    clock_button.connect_clicked(move |button| {
+                        popover_clone.set_pointing_to(Some(&button.allocation()));
+                        popover_clone.popup();
+                    });
 
-                battery_button.connect_clicked(move |button| {
-                    battery_popover.set_pointing_to(Some(&button.allocation()));
-                    battery_popover.popup();
-                });
+                    target.append(&clock_button);
+                }
+                ModuleType::Battery => {
+                    let battery_widget = BatteryWidget::new(battery_service_for_module.clone());
+                    let battery_button = battery_widget.widget();
 
-                battery_window_instance = Some(bw_instance);
-                target.append(battery_button);
+                    let bw_instance = BatteryWindow::new(battery_cfg);
+                    let battery_popover = bw_instance.popover().clone();
+                    battery_popover.set_parent(battery_button);
+
+                    battery_button.connect_clicked(move |button| {
+                        battery_popover.set_pointing_to(Some(&button.allocation()));
+                        battery_popover.popup();
+                    });
+
+                    battery_window_instance = Some(bw_instance);
+                    target.append(battery_button);
+                }
             }
         };
 
