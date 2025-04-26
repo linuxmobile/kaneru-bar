@@ -1,6 +1,6 @@
 use crate::utils::{get_distro_icon_name, BarConfig, ModuleType};
-use crate::widgets::ActiveClientWidget;
-use crate::windows::{AppMenu, DateWindow};
+use crate::widgets::{ActiveClientWidget, BatteryWidget};
+use crate::windows::{AppMenu, BatteryWindow, DateWindow};
 use chrono::Local;
 use glib::source::timeout_add_local;
 use glib::ControlFlow;
@@ -15,6 +15,7 @@ pub struct BarWindow {
     window: ApplicationWindow,
     _date_popover_provider: DateWindow,
     _app_menu: Option<Rc<AppMenu>>,
+    _battery_window: Option<Rc<BatteryWindow>>,
 }
 
 impl BarWindow {
@@ -42,6 +43,7 @@ impl BarWindow {
         right_box.add_css_class("right-box");
 
         let mut app_menu_instance: Option<Rc<AppMenu>> = None;
+        let mut battery_window_instance: Option<Rc<BatteryWindow>> = None;
 
         let fmt = config
             .clock_format
@@ -129,6 +131,22 @@ impl BarWindow {
 
                 target.append(&clock_button);
             }
+            ModuleType::Battery => {
+                let battery_widget = BatteryWidget::new();
+                let battery_button = battery_widget.widget();
+
+                let bw_instance = BatteryWindow::new(&config_clone);
+                let battery_popover = bw_instance.popover().clone();
+                battery_popover.set_parent(battery_button);
+
+                battery_button.connect_clicked(move |button| {
+                    battery_popover.set_pointing_to(Some(&button.allocation()));
+                    battery_popover.popup();
+                });
+
+                battery_window_instance = Some(bw_instance);
+                target.append(battery_button);
+            }
         };
 
         for m in &config.modules_left {
@@ -150,6 +168,7 @@ impl BarWindow {
             window,
             _date_popover_provider: date_window_instance,
             _app_menu: app_menu_instance,
+            _battery_window: battery_window_instance,
         }
     }
 

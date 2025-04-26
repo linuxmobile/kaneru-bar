@@ -7,6 +7,7 @@ pub enum ModuleType {
     AppMenu,
     ActiveClient,
     Clock,
+    Battery,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq, Hash)]
@@ -36,7 +37,7 @@ impl Default for BarConfig {
             font: Some("Sans 10".to_string()),
             modules_left: vec![ModuleType::AppMenu, ModuleType::ActiveClient],
             modules_center: vec![],
-            modules_right: vec![ModuleType::Clock],
+            modules_right: vec![ModuleType::Battery, ModuleType::Clock],
             distro_icon_override: None,
             clock_format: Some("%A %e, %H:%M".to_string()),
             notification_position: NotificationPosition::TopRight,

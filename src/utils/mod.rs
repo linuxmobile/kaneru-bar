@@ -1,3 +1,4 @@
+pub mod battery;
 pub(crate) mod config;
 mod distro;
 pub mod niri;
