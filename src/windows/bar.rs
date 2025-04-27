@@ -1,8 +1,11 @@
 use crate::utils::{
-    battery::BatteryService, config::BatteryConfig, get_distro_icon_name, BarConfig, ModuleType,
+    battery::BatteryService,
+    config::{BarConfig, BatteryConfig, ModuleType, NetworkConfig},
+    get_distro_icon_name,
+    network::NetworkService,
 };
-use crate::widgets::{ActiveClientWidget, BatteryWidget};
-use crate::windows::{AppMenu, BatteryWindow, DateWindow};
+use crate::widgets::{ActiveClientWidget, BatteryWidget, NetworkWidget};
+use crate::windows::{AppMenu, BatteryWindow, DateWindow, NetworkWindow};
 use chrono::Local;
 use glib::source::timeout_add_local;
 use glib::ControlFlow;
@@ -11,17 +14,27 @@ use gtk4::{
     glib, Application, ApplicationWindow, Box as GtkBox, Button, Label, MenuButton, Orientation,
 };
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
-use std::{cell::RefCell, rc::Rc, time::Duration};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 pub struct BarWindow {
     window: ApplicationWindow,
     _date_popover_provider: DateWindow,
     _app_menu: Option<Rc<AppMenu>>,
     _battery_window: Option<Rc<BatteryWindow>>,
+    _network_window: Option<Rc<NetworkWindow>>,
 }
 
 impl BarWindow {
-    pub fn new(app: &Application, config: &BarConfig) -> Self {
+    pub fn new(
+        app: &Application,
+        config: &BarConfig,
+        network_service_opt: Arc<Mutex<Option<Arc<NetworkService>>>>,
+    ) -> Self {
         let battery_service = Rc::new(RefCell::new(
             BatteryService::new().expect("Failed to initialize shared BatteryService"),
         ));
@@ -50,6 +63,7 @@ impl BarWindow {
 
         let mut app_menu_instance: Option<Rc<AppMenu>> = None;
         let mut battery_window_instance: Option<Rc<BatteryWindow>> = None;
+        let mut network_window_instance: Option<Rc<NetworkWindow>> = None;
 
         let fmt = config
             .clock_format
@@ -63,8 +77,13 @@ impl BarWindow {
         let config_clone_app_menu = config.clone();
         let window_weak = window.downgrade();
 
-        let mut add_module = |m: &ModuleType, target: &GtkBox, battery_cfg: &BatteryConfig| {
+        let mut add_module = |m: &ModuleType,
+                              target: &GtkBox,
+                              battery_cfg: &BatteryConfig,
+                              network_cfg: &NetworkConfig| {
             let battery_service_for_module = battery_service_clone.clone();
+            let network_service_opt_clone = network_service_opt.clone();
+
             match m {
                 ModuleType::AppMenu => {
                     let btn = MenuButton::new();
@@ -156,17 +175,58 @@ impl BarWindow {
                     battery_window_instance = Some(bw_instance);
                     target.append(battery_button);
                 }
+                ModuleType::Network => {
+                    let service_guard = network_service_opt_clone.lock().unwrap();
+                    if let Some(service) = service_guard.as_ref() {
+                        let network_widget = NetworkWidget::new(service.clone());
+                        let network_button = network_widget.widget();
+
+                        let nw_instance = NetworkWindow::new(network_cfg, service.clone());
+                        let network_popover = nw_instance.popover().clone();
+                        let network_popover_clone = network_popover.clone();
+                        network_popover.set_parent(network_button);
+
+                        let revealer_opt = nw_instance.networks_revealer();
+                        let icon_opt = nw_instance.available_networks_button_icon();
+                        let nw_instance_clone = nw_instance.clone();
+
+                        network_button.connect_clicked(move |button| {
+                            network_popover.set_pointing_to(Some(&button.allocation()));
+                            network_popover.popup();
+                        });
+
+                        network_popover_clone.connect_closed(move |_| {
+                            if let Some(revealer) = &revealer_opt {
+                                if revealer.reveals_child() {
+                                    revealer.set_reveal_child(false);
+                                    if let Some(icon) = &icon_opt {
+                                        icon.set_icon_name(Some("pan-down-symbolic"));
+                                    }
+                                    *nw_instance_clone.networks_visible.borrow_mut() = false;
+                                    nw_instance_clone.stop_scan_timer();
+                                }
+                            }
+                        });
+
+                        network_window_instance = Some(nw_instance);
+                        target.append(network_button);
+                    } else {
+                        eprintln!("Network module enabled in config, but NetworkService failed to initialize.");
+                        let error_label = Label::new(Some("Network N/A"));
+                        target.append(&error_label);
+                    }
+                }
             }
         };
 
         for m in &config.modules_left {
-            add_module(m, &left_box, &config.battery);
+            add_module(m, &left_box, &config.battery, &config.network);
         }
         for m in &config.modules_center {
-            add_module(m, &center_box, &config.battery);
+            add_module(m, &center_box, &config.battery, &config.network);
         }
         for m in &config.modules_right {
-            add_module(m, &right_box, &config.battery);
+            add_module(m, &right_box, &config.battery, &config.network);
         }
 
         container.append(&left_box);
@@ -179,6 +239,7 @@ impl BarWindow {
             _date_popover_provider: date_window_instance,
             _app_menu: app_menu_instance,
             _battery_window: battery_window_instance,
+            _network_window: network_window_instance,
         }
     }
 

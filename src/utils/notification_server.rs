@@ -5,7 +5,7 @@ use std::future::pending;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
-use zbus::zvariant::Value;
+use zbus::zvariant::{OwnedValue, Value};
 use zbus::{interface, Connection};
 
 static NEXT_NOTIFICATION_ID: AtomicU32 = AtomicU32::new(1);
@@ -82,7 +82,7 @@ impl NotificationServer {
             replaces_id
         };
 
-        let mut owned = HashMap::new();
+        let mut owned: HashMap<String, OwnedValue> = HashMap::new();
         for (k, v) in hints_raw {
             if let Ok(o) = v.try_to_owned() {
                 owned.insert(k, o);
@@ -91,16 +91,19 @@ impl NotificationServer {
 
         let urgency = owned
             .get("urgency")
-            .and_then(|v| Urgency::try_from(v.clone()).ok())
+            .and_then(|v_ref| v_ref.try_clone().ok())
+            .and_then(|v_owned| Urgency::try_from(v_owned).ok())
             .unwrap_or(Urgency::Normal);
 
         let image_path = owned
             .get("image-path")
-            .and_then(|v| String::try_from(v.clone()).ok());
+            .and_then(|v_ref| v_ref.try_clone().ok())
+            .and_then(|v_owned| String::try_from(v_owned).ok());
 
         let resident = owned
             .get("resident")
-            .and_then(|v| bool::try_from(v.clone()).ok())
+            .and_then(|v_ref| v_ref.try_clone().ok())
+            .and_then(|v_owned| bool::try_from(v_owned).ok())
             .unwrap_or(false);
 
         let notification = Notification::new(

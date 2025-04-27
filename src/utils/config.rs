@@ -8,6 +8,7 @@ pub enum ModuleType {
     ActiveClient,
     Clock,
     Battery,
+    Network,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq, Hash)]
@@ -40,6 +41,10 @@ impl Default for BatteryConfig {
     }
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+#[serde(default)]
+pub struct NetworkConfig {}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct BarConfig {
@@ -51,6 +56,7 @@ pub struct BarConfig {
     pub clock_format: Option<String>,
     pub notification_position: NotificationPosition,
     pub battery: BatteryConfig,
+    pub network: NetworkConfig,
 }
 
 impl Default for BarConfig {
@@ -64,6 +70,7 @@ impl Default for BarConfig {
             clock_format: Some("%A %e, %H:%M".to_string()),
             notification_position: NotificationPosition::TopRight,
             battery: BatteryConfig::default(),
+            network: NetworkConfig::default(),
         }
     }
 }
