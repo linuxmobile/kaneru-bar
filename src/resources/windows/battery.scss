@@ -78,6 +78,7 @@ popover.BatteryWindow {
             padding: to-rem(12px) to-rem(8px);
             transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
             border: to-rem(1px) solid transparent;
+            outline: none;
 
             &:hover {
               background-color: gtkalpha($surface2, 0.6);
@@ -119,6 +120,7 @@ popover.BatteryWindow {
           padding: to-rem(14px) to-rem(16px);
           transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
           border: to-rem(1px) solid transparent;
+          outline: none;
 
           &:hover {
             background-color: gtkalpha($surface2, 0.6);

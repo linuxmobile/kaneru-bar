@@ -2,14 +2,15 @@ use crate::utils::{
     battery::{
         format_charge_status, get_active_power_profile, get_available_power_profiles,
         get_conservation_mode, set_conservation_mode, set_power_profile, BatteryDetails,
-        BatteryService, PowerProfile,
+        BatteryService, BatteryUtilError, PowerProfile,
     },
     config::BatteryConfig,
 };
 use battery::State;
 use gtk4::prelude::*;
 use gtk4::{glib, Align, Box as GtkBox, Button, Image, Label, Orientation, Popover};
-use std::{cell::RefCell, path::PathBuf, rc::Rc, time::Duration};
+use std::{cell::RefCell, rc::Rc, time::Duration};
+use tokio::task;
 
 const REFRESH_INTERVAL_WINDOW: Duration = Duration::from_secs(5);
 
@@ -34,9 +35,11 @@ pub struct BatteryWindow {
     service: Rc<RefCell<BatteryService>>,
     details: Rc<RefCell<Option<BatteryDetails>>>,
     active_profile: Rc<RefCell<Option<PowerProfile>>>,
+    available_profiles: Rc<RefCell<Option<Result<Vec<PowerProfile>, BatteryUtilError>>>>,
     conservation_mode: Rc<RefCell<Option<bool>>>,
     ui_elements: Rc<RefCell<Option<BatteryWindowUI>>>,
-    _update_source_id: Rc<RefCell<Option<glib::SourceId>>>,
+    polling_active: Rc<RefCell<bool>>,
+    update_source_id: Rc<RefCell<Option<glib::SourceId>>>,
 }
 
 impl BatteryWindow {
@@ -50,9 +53,11 @@ impl BatteryWindow {
         ));
         let details = Rc::new(RefCell::new(None));
         let active_profile = Rc::new(RefCell::new(None));
+        let available_profiles = Rc::new(RefCell::new(None));
         let conservation_mode = Rc::new(RefCell::new(None));
         let ui_elements = Rc::new(RefCell::new(None));
         let update_source_id = Rc::new(RefCell::new(None));
+        let polling_active = Rc::new(RefCell::new(false));
 
         let window = Rc::new(Self {
             popover: popover.clone(),
@@ -60,9 +65,11 @@ impl BatteryWindow {
             service,
             details: details.clone(),
             active_profile: active_profile.clone(),
+            available_profiles: available_profiles.clone(),
             conservation_mode: conservation_mode.clone(),
             ui_elements: ui_elements.clone(),
-            _update_source_id: update_source_id.clone(),
+            polling_active: polling_active.clone(),
+            update_source_id: update_source_id.clone(),
         });
 
         let main_box = GtkBox::builder()
@@ -115,7 +122,6 @@ impl BatteryWindow {
         let window_clone = window.clone();
         popover.connect_visible_notify(move |pop| {
             if pop.is_visible() {
-                window_clone.update_all_data();
                 window_clone.start_polling();
             } else {
                 window_clone.stop_polling();
@@ -278,30 +284,63 @@ impl BatteryWindow {
         button_content.append(&status_icon);
         button.set_child(Some(&button_content));
 
-        let window_clone = window_rc.clone();
+        let weak_window = Rc::downgrade(&window_rc);
         let status_icon_clone = status_icon.clone();
         button.connect_clicked(move |btn| {
-            let conservation_path = window_clone.config.conservation_mode_path.clone();
-            let Some(path) = conservation_path else {
-                eprintln!("Conservation mode path not configured.");
-                return;
-            };
+            if let Some(window) = weak_window.upgrade() {
+                let conservation_path = window.config.conservation_mode_path.clone();
+                let Some(path) = conservation_path else {
+                    eprintln!("Conservation mode path not configured.");
+                    return;
+                };
 
-            let current_state = window_clone.conservation_mode.borrow().unwrap_or(false);
-            let new_state = !current_state;
-            match set_conservation_mode(new_state, &path) {
-                Ok(_) => {
-                    *window_clone.conservation_mode.borrow_mut() = Some(new_state);
-                    Self::update_conservation_button_style(btn, new_state, &status_icon_clone);
-                    btn.set_sensitive(true);
-                    window_clone.update_ui();
-                }
-                Err(e) => {
-                    eprintln!("Failed to set conservation mode: {}", e);
-                    *window_clone.conservation_mode.borrow_mut() = None;
-                    btn.set_sensitive(false);
-                    Self::update_conservation_button_style(btn, false, &status_icon_clone);
-                }
+                let current_state = window.conservation_mode.borrow().unwrap_or(false);
+                let new_state = !current_state;
+                let btn_clone = btn.clone();
+                let status_icon_clone_async = status_icon_clone.clone();
+                let weak_window_async = weak_window.clone();
+
+                glib::MainContext::default().spawn_local(async move {
+                    let result =
+                        task::spawn_blocking(move || set_conservation_mode(new_state, &path)).await;
+                    if let Some(window) = weak_window_async.upgrade() {
+                        match result {
+                            Ok(Ok(_)) => {
+                                *window.conservation_mode.borrow_mut() = Some(new_state);
+                                Self::update_conservation_button_style(
+                                    &btn_clone,
+                                    new_state,
+                                    &status_icon_clone_async,
+                                );
+                                btn_clone.set_sensitive(true);
+                                window.update_ui();
+                            }
+                            Ok(Err(e)) => {
+                                eprintln!("Failed to set conservation mode: {}", e);
+                                *window.conservation_mode.borrow_mut() = None;
+                                btn_clone.set_sensitive(false);
+                                Self::update_conservation_button_style(
+                                    &btn_clone,
+                                    false,
+                                    &status_icon_clone_async,
+                                );
+                            }
+                            Err(join_err) => {
+                                eprintln!(
+                                    "Tokio task failed for set_conservation_mode: {}",
+                                    join_err
+                                );
+                                *window.conservation_mode.borrow_mut() = None;
+                                btn_clone.set_sensitive(false);
+                                Self::update_conservation_button_style(
+                                    &btn_clone,
+                                    false,
+                                    &status_icon_clone_async,
+                                );
+                            }
+                        }
+                    }
+                });
             }
         });
 
@@ -346,14 +385,61 @@ impl BatteryWindow {
         section_box
     }
 
-    fn update_all_data(self: &Rc<Self>) {
+    async fn update_all_data(self: &Rc<Self>) {
         self.update_battery_details();
-        if self.config.show_power_profiles {
-            self.update_power_profile_data();
+
+        let active_profile_res = task::spawn_blocking(get_active_power_profile).await;
+        let available_profiles_res = task::spawn_blocking(get_available_power_profiles).await;
+
+        let conservation_path_opt = self.config.conservation_mode_path.clone();
+        let conservation_res = if let Some(path) = conservation_path_opt {
+            task::spawn_blocking(move || get_conservation_mode(&path)).await
+        } else {
+            Ok(Ok(false))
+        };
+
+        match active_profile_res {
+            Ok(Ok(p)) => *self.active_profile.borrow_mut() = Some(p),
+            Ok(Err(e)) => {
+                eprintln!("Failed to get active power profile: {}", e);
+                *self.active_profile.borrow_mut() = None;
+            }
+            Err(e) => {
+                eprintln!("Tokio task failed for get_active_power_profile: {}", e);
+                *self.active_profile.borrow_mut() = None;
+            }
         }
-        if self.config.show_conservation_mode && self.config.conservation_mode_path.is_some() {
-            self.update_conservation_mode_data();
+
+        match available_profiles_res {
+            Ok(Ok(p_vec)) => *self.available_profiles.borrow_mut() = Some(Ok(p_vec)),
+            Ok(Err(e)) => {
+                eprintln!("Failed to get available power profiles: {}", e);
+                *self.available_profiles.borrow_mut() = Some(Err(e));
+            }
+            Err(e) => {
+                eprintln!("Tokio task failed for get_available_power_profiles: {}", e);
+                *self.available_profiles.borrow_mut() = None;
+            }
         }
+
+        if self.config.conservation_mode_path.is_some() {
+            match conservation_res {
+                Ok(Ok(b)) => {
+                    *self.conservation_mode.borrow_mut() = Some(b);
+                }
+                Ok(Err(e)) => {
+                    eprintln!("Failed to get conservation mode state: {}", e);
+                    *self.conservation_mode.borrow_mut() = None;
+                }
+                Err(e) => {
+                    eprintln!("Tokio task failed for get_conservation_mode: {}", e);
+                    *self.conservation_mode.borrow_mut() = None;
+                }
+            }
+        } else {
+            *self.conservation_mode.borrow_mut() = None;
+        }
+
         self.update_ui();
     }
 
@@ -363,34 +449,6 @@ impl BatteryWindow {
             Err(e) => {
                 eprintln!("Failed to get battery details: {}", e);
                 *self.details.borrow_mut() = None;
-            }
-        }
-    }
-
-    fn update_power_profile_data(self: &Rc<Self>) {
-        match get_active_power_profile() {
-            Ok(p) => *self.active_profile.borrow_mut() = Some(p),
-            Err(e) => {
-                eprintln!("Failed to get active power profile: {}", e);
-                *self.active_profile.borrow_mut() = None;
-            }
-        }
-    }
-
-    fn update_conservation_mode_data(self: &Rc<Self>) {
-        let conservation_path: Option<PathBuf> = self.config.conservation_mode_path.clone();
-        let Some(path) = conservation_path else {
-            *self.conservation_mode.borrow_mut() = None;
-            return;
-        };
-
-        match get_conservation_mode(&path) {
-            Ok(b) => {
-                *self.conservation_mode.borrow_mut() = Some(b);
-            }
-            Err(e) => {
-                eprintln!("Failed to get conservation mode state: {}", e);
-                *self.conservation_mode.borrow_mut() = None;
             }
         }
     }
@@ -448,11 +506,24 @@ impl BatteryWindow {
             .set_visible(self.config.show_power_profiles);
         if self.config.show_power_profiles {
             let active_profile_opt = self.active_profile.borrow();
-            let active_p = active_profile_opt.as_ref();
-            Self::rebuild_power_profile_buttons(self, &ui.power_profile_buttons_box, active_p);
+            let available_profiles_opt = self.available_profiles.borrow();
+            self.rebuild_power_profile_buttons(
+                &ui.power_profile_buttons_box,
+                active_profile_opt.as_ref(),
+                available_profiles_opt.as_ref(),
+            );
         }
 
-        if self.config.show_conservation_mode && self.config.conservation_mode_path.is_some() {
+        let conservation_should_be_visible =
+            self.config.show_conservation_mode && self.config.conservation_mode_path.is_some();
+
+        if let Some(parent) = ui.conservation_mode_button.parent() {
+            if let Some(section) = parent.parent().and_then(|p| p.downcast::<GtkBox>().ok()) {
+                section.set_visible(conservation_should_be_visible);
+            }
+        }
+
+        if conservation_should_be_visible {
             match *conservation_mode_state {
                 Some(enabled) => {
                     ui.conservation_mode_button.set_sensitive(true);
@@ -475,16 +546,17 @@ impl BatteryWindow {
     }
 
     fn rebuild_power_profile_buttons(
-        window_rc: &Rc<Self>,
+        self: &Rc<Self>,
         buttons_box: &GtkBox,
         active_profile: Option<&PowerProfile>,
+        available_profiles_res: Option<&Result<Vec<PowerProfile>, BatteryUtilError>>,
     ) {
         while let Some(child) = buttons_box.first_child() {
             buttons_box.remove(&child);
         }
 
-        match get_available_power_profiles() {
-            Ok(available_profiles) => {
+        match available_profiles_res {
+            Some(Ok(available_profiles)) => {
                 if available_profiles.is_empty() {
                     if let Some(parent) = buttons_box.parent() {
                         parent.set_visible(false);
@@ -509,30 +581,49 @@ impl BatteryWindow {
                         .hexpand(true)
                         .build();
 
-                    if Some(&profile) == active_profile {
+                    if Some(profile) == active_profile {
                         button.add_css_class("active");
                     }
 
                     let profile_clone = profile.clone();
-                    let weak_window = Rc::downgrade(window_rc);
+                    let weak_window = Rc::downgrade(self);
                     button.connect_clicked(move |_| {
-                        if let Some(window) = weak_window.upgrade() {
-                            match set_power_profile(profile_clone.clone()) {
-                                Ok(_) => {
-                                    window.update_power_profile_data();
-                                    window.update_ui();
+                        if let Some(_window) = weak_window.upgrade() {
+                            let profile_to_set = profile_clone.clone();
+                            let weak_window_async = weak_window.clone();
+                            glib::MainContext::default().spawn_local(async move {
+                                let result =
+                                    task::spawn_blocking(move || set_power_profile(profile_to_set))
+                                        .await;
+                                if let Some(window) = weak_window_async.upgrade() {
+                                    match result {
+                                        Ok(Ok(_)) => {
+                                            window.update_all_data().await;
+                                        }
+                                        Ok(Err(e)) => {
+                                            eprintln!("Failed to set power profile: {}", e);
+                                        }
+                                        Err(join_err) => {
+                                            eprintln!(
+                                                "Tokio task failed for set_power_profile: {}",
+                                                join_err
+                                            );
+                                        }
+                                    }
                                 }
-                                Err(e) => {
-                                    eprintln!("Failed to set power profile: {}", e);
-                                }
-                            }
+                            });
                         }
                     });
                     buttons_box.append(&button);
                 }
             }
-            Err(e) => {
-                eprintln!("Failed to get available power profiles: {}", e);
+            Some(Err(e)) => {
+                eprintln!("Error getting available power profiles: {}", e);
+                if let Some(parent) = buttons_box.parent() {
+                    parent.set_visible(false);
+                }
+            }
+            None => {
                 if let Some(parent) = buttons_box.parent() {
                     parent.set_visible(false);
                 }
@@ -551,24 +642,41 @@ impl BatteryWindow {
     }
 
     fn start_polling(self: &Rc<Self>) {
-        if self._update_source_id.borrow().is_some() {
+        if *self.polling_active.borrow() {
             return;
         }
+        *self.polling_active.borrow_mut() = true;
+
+        let weak_self_init = Rc::downgrade(self);
+        glib::MainContext::default().spawn_local(async move {
+            if let Some(s) = weak_self_init.upgrade() {
+                s.update_all_data().await;
+            }
+        });
 
         let weak_self = Rc::downgrade(self);
         let id = glib::timeout_add_local(REFRESH_INTERVAL_WINDOW, move || {
             if let Some(inner_self) = weak_self.upgrade() {
-                inner_self.update_all_data();
+                if !inner_self.popover.is_visible() {
+                    *inner_self.polling_active.borrow_mut() = false;
+                    *inner_self.update_source_id.borrow_mut() = None;
+                    return glib::ControlFlow::Break;
+                }
+                let s_clone = inner_self.clone();
+                glib::MainContext::default().spawn_local(async move {
+                    s_clone.update_all_data().await;
+                });
                 glib::ControlFlow::Continue
             } else {
                 glib::ControlFlow::Break
             }
         });
-        *self._update_source_id.borrow_mut() = Some(id);
+        *self.update_source_id.borrow_mut() = Some(id);
     }
 
     fn stop_polling(self: &Rc<Self>) {
-        if let Some(id) = self._update_source_id.borrow_mut().take() {
+        *self.polling_active.borrow_mut() = false;
+        if let Some(id) = self.update_source_id.borrow_mut().take() {
             id.remove();
         }
     }
@@ -579,5 +687,9 @@ impl BatteryWindow {
 }
 
 impl Drop for BatteryWindow {
-    fn drop(&mut self) {}
+    fn drop(&mut self) {
+        if let Some(id) = self.update_source_id.borrow_mut().take() {
+            id.remove();
+        }
+    }
 }
