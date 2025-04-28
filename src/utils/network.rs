@@ -11,12 +11,12 @@ use zbus::{
 
 const NM_STATE_CONNECTED_GLOBAL: u32 = 70;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum NetworkUtilError {
-    Zbus(ZbusError),
+    Zbus(String),
     Nm(String),
     NoWifiDevice,
-    Io(std::io::Error),
+    Io(String),
     Utf8(std::str::Utf8Error),
     TypeConversion(String),
     InvalidEnumValue(String),
@@ -41,8 +41,6 @@ impl fmt::Display for NetworkUtilError {
 impl std::error::Error for NetworkUtilError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            NetworkUtilError::Zbus(e) => Some(e),
-            NetworkUtilError::Io(e) => Some(e),
             NetworkUtilError::Utf8(e) => Some(e),
             NetworkUtilError::TryFromIntError(e) => Some(e),
             _ => None,
@@ -52,13 +50,13 @@ impl std::error::Error for NetworkUtilError {
 
 impl From<ZbusError> for NetworkUtilError {
     fn from(err: ZbusError) -> Self {
-        NetworkUtilError::Zbus(err)
+        NetworkUtilError::Zbus(err.to_string())
     }
 }
 
 impl From<std::io::Error> for NetworkUtilError {
     fn from(err: std::io::Error) -> Self {
-        NetworkUtilError::Io(err)
+        NetworkUtilError::Io(err.to_string())
     }
 }
 
@@ -273,7 +271,7 @@ impl NetworkService {
         proxy
             .set_property("WirelessEnabled", Value::from(enabled))
             .await
-            .map_err(|e| NetworkUtilError::Zbus(ZbusError::FDO(Box::new(e))))?;
+            .map_err(|e| NetworkUtilError::Zbus(e.to_string()))?;
 
         if enabled {
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -358,6 +356,43 @@ impl NetworkService {
             .map_err(|e| NetworkUtilError::Nm(e.to_string()))?;
         Ok(())
     }
+
+    pub async fn get_airplane_mode_state(&self) -> Result<bool, NetworkUtilError> {
+        let proxy = zbus::Proxy::new(
+            self.connection.as_ref(),
+            "org.freedesktop.NetworkManager",
+            "/org/freedesktop/NetworkManager",
+            "org.freedesktop.NetworkManager",
+        )
+        .await?;
+
+        let wireless_enabled: bool = proxy.get_property("WirelessEnabled").await?;
+        let wwan_enabled: bool = proxy.get_property("WwanEnabled").await?;
+
+        Ok(!wireless_enabled && !wwan_enabled)
+    }
+
+    pub async fn set_airplane_mode(&self, enabled: bool) -> Result<(), NetworkUtilError> {
+        let proxy = zbus::Proxy::new(
+            self.connection.as_ref(),
+            "org.freedesktop.NetworkManager",
+            "/org/freedesktop/NetworkManager",
+            "org.freedesktop.NetworkManager",
+        )
+        .await?;
+
+        let wireless_enabled = proxy
+            .set_property("WirelessEnabled", Value::from(!enabled))
+            .await;
+        let wwan_enabled = proxy
+            .set_property("WwanEnabled", Value::from(!enabled))
+            .await;
+
+        wireless_enabled.map_err(|e| NetworkUtilError::Zbus(e.to_string()))?;
+        wwan_enabled.map_err(|e| NetworkUtilError::Zbus(e.to_string()))?;
+
+        Ok(())
+    }
 }
 
 fn get_wifi_icon_name(connected: bool, strength: Option<u8>) -> String {
@@ -379,4 +414,29 @@ fn get_wifi_signal_icon_name(strength: u8) -> String {
         _ => "network-wireless-signal-none-symbolic",
     }
     .to_string()
+}
+
+#[derive(Debug)]
+pub enum NetworkCommand {
+    GetDetails,
+    GetAccessPoints,
+    RequestScan,
+    SetWifiEnabled(bool),
+    SetAirplaneMode(bool),
+    GetAirplaneModeState,
+    ConnectToNetwork {
+        ap_path: OwnedObjectPath,
+        device_path: OwnedObjectPath,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub enum NetworkResult {
+    Details(Result<WifiDetails, NetworkUtilError>),
+    AccessPoints(Result<Vec<AccessPointInfo>, NetworkUtilError>),
+    ScanRequested(Result<(), NetworkUtilError>),
+    WifiSet(Result<(), NetworkUtilError>),
+    AirplaneModeSet(Result<(), NetworkUtilError>),
+    AirplaneModeState(Result<bool, NetworkUtilError>),
+    Connected(Result<(), NetworkUtilError>),
 }

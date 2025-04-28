@@ -1,6 +1,6 @@
 use crate::utils::{
     config::NetworkConfig,
-    network::{AccessPointInfo, NetworkService, NetworkUtilError, WifiDetails},
+    network::{AccessPointInfo, NetworkCommand, NetworkUtilError, WifiDetails},
 };
 use gtk4::prelude::*;
 use gtk4::{
@@ -9,8 +9,8 @@ use gtk4::{
     RevealerTransitionType, ScrolledWindow, Separator, Spinner, Switch,
 };
 use std::{cell::RefCell, rc::Rc, sync::Arc, time::Duration};
-use tokio::sync::Mutex;
-use zbus::zvariant::{OwnedObjectPath, Value};
+use tokio::sync::mpsc;
+use zbus::zvariant::OwnedObjectPath;
 
 const REFRESH_INTERVAL_WINDOW: Duration = Duration::from_secs(10);
 const SCAN_INTERVAL: Duration = Duration::from_secs(20);
@@ -38,9 +38,9 @@ struct NetworkWindowUI {
 pub struct NetworkWindow {
     popover: Popover,
     _config: NetworkConfig,
-    service: Arc<NetworkService>,
-    details: Arc<Mutex<Option<WifiDetails>>>,
-    access_points: Arc<Mutex<Vec<AccessPointInfo>>>,
+    command_sender: mpsc::Sender<NetworkCommand>,
+    details: Rc<RefCell<Option<WifiDetails>>>,
+    access_points: Arc<RefCell<Vec<AccessPointInfo>>>,
     ui_elements: Rc<RefCell<Option<NetworkWindowUI>>>,
     is_scanning: Rc<RefCell<bool>>,
     pub networks_visible: Rc<RefCell<bool>>,
@@ -51,15 +51,15 @@ pub struct NetworkWindow {
 }
 
 impl NetworkWindow {
-    pub fn new(config: &NetworkConfig, service: Arc<NetworkService>) -> Rc<Self> {
+    pub fn new(config: &NetworkConfig, command_sender: mpsc::Sender<NetworkCommand>) -> Rc<Self> {
         let popover = Popover::builder()
             .autohide(true)
             .cascade_popdown(true)
             .build();
         popover.add_css_class("NetworkWindow");
 
-        let details = Arc::new(Mutex::new(None));
-        let access_points = Arc::new(Mutex::new(Vec::new()));
+        let details = Rc::new(RefCell::new(None));
+        let access_points = Arc::new(RefCell::new(Vec::new()));
         let ui_elements = Rc::new(RefCell::new(None));
         let update_source_id = Rc::new(RefCell::new(None));
         let scan_source_id = Rc::new(RefCell::new(None));
@@ -71,7 +71,7 @@ impl NetworkWindow {
         let window = Rc::new(Self {
             popover: popover.clone(),
             _config: config.clone(),
-            service,
+            command_sender: command_sender.clone(),
             details: details.clone(),
             access_points: access_points.clone(),
             ui_elements: ui_elements.clone(),
@@ -151,6 +151,8 @@ impl NetworkWindow {
                     if let Some(ui) = window_clone.ui_elements.borrow().as_ref() {
                         ui.networks_revealer.set_reveal_child(false);
                         ui.available_networks_button_icon
+                            .set_icon_name(Some("pan-down-symbolic"));
+                        ui.available_networks_button_icon
                             .remove_css_class("expanded");
                     }
                     *window_clone.networks_visible.borrow_mut() = false;
@@ -227,25 +229,10 @@ impl NetworkWindow {
 
         wifi_switch.connect_state_set(move |_, state| {
             if let Some(window) = weak_window.upgrade() {
-                let service = window.service.clone();
                 window.set_controls_sensitive(false);
-                let weak_window_async = weak_window.clone();
+                let sender = window.command_sender.clone();
                 glib::MainContext::default().spawn_local(async move {
-                    match service.set_wifi_enabled(state).await {
-                        Ok(_) => {
-                            if let Some(w) = weak_window_async.upgrade() {
-                                w.update_all_data().await;
-                                w.set_controls_sensitive(true);
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!("Failed to set Wi-Fi state: {}", e);
-                            if let Some(w) = weak_window_async.upgrade() {
-                                w.update_switches_state().await;
-                                w.set_controls_sensitive(true);
-                            }
-                        }
-                    }
+                    let _ = sender.send(NetworkCommand::SetWifiEnabled(state)).await;
                 });
             }
             glib::Propagation::Stop
@@ -261,24 +248,9 @@ impl NetworkWindow {
         airplane_switch.connect_state_set(move |_, state| {
             if let Some(window) = weak_window_ap.upgrade() {
                 window.set_controls_sensitive(false);
-                let weak_window_async = weak_window_ap.clone();
+                let sender = window.command_sender.clone();
                 glib::MainContext::default().spawn_local(async move {
-                    match Self::set_airplane_mode(state).await {
-                        Ok(_) => {
-                            if let Some(w) = weak_window_async.upgrade() {
-                                *w.airplane_mode_active.borrow_mut() = state;
-                                w.update_all_data().await;
-                                w.set_controls_sensitive(true);
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!("Failed to set Airplane Mode state: {}", e);
-                            if let Some(w) = weak_window_async.upgrade() {
-                                w.update_switches_state().await;
-                                w.set_controls_sensitive(true);
-                            }
-                        }
-                    }
+                    let _ = sender.send(NetworkCommand::SetAirplaneMode(state)).await;
                 });
             }
             glib::Propagation::Stop
@@ -291,45 +263,6 @@ impl NetworkWindow {
             wifi_toggle_button,
             wifi_switch,
         )
-    }
-
-    async fn set_airplane_mode(enabled: bool) -> Result<(), NetworkUtilError> {
-        let connection = zbus::Connection::system().await?;
-        let proxy = zbus::Proxy::new(
-            &connection,
-            "org.freedesktop.NetworkManager",
-            "/org/freedesktop/NetworkManager",
-            "org.freedesktop.NetworkManager",
-        )
-        .await?;
-
-        let wireless_enabled = proxy
-            .set_property("WirelessEnabled", Value::from(!enabled))
-            .await;
-        let wwan_enabled = proxy
-            .set_property("WwanEnabled", Value::from(!enabled))
-            .await;
-
-        wireless_enabled.map_err(|e| NetworkUtilError::Zbus(zbus::Error::FDO(Box::new(e))))?;
-        wwan_enabled.map_err(|e| NetworkUtilError::Zbus(zbus::Error::FDO(Box::new(e))))?;
-
-        Ok(())
-    }
-
-    async fn get_airplane_mode_state() -> Result<bool, NetworkUtilError> {
-        let connection = zbus::Connection::system().await?;
-        let proxy = zbus::Proxy::new(
-            &connection,
-            "org.freedesktop.NetworkManager",
-            "/org/freedesktop/NetworkManager",
-            "org.freedesktop.NetworkManager",
-        )
-        .await?;
-
-        let wireless_enabled: bool = proxy.get_property("WirelessEnabled").await?;
-        let wwan_enabled: bool = proxy.get_property("WwanEnabled").await?;
-
-        Ok(!wireless_enabled && !wwan_enabled)
     }
 
     fn build_current_network_section() -> (GtkBox, GtkBox, Image, Label, GtkBox, Label, Label, Label)
@@ -445,8 +378,10 @@ impl NetworkWindow {
                 *window.networks_visible.borrow_mut() = should_reveal;
 
                 if should_reveal {
+                    icon_clone.set_icon_name(Some("pan-up-symbolic"));
                     icon_clone.add_css_class("expanded");
                 } else {
+                    icon_clone.set_icon_name(Some("pan-down-symbolic"));
                     icon_clone.remove_css_class("expanded");
                 }
 
@@ -523,38 +458,91 @@ impl NetworkWindow {
         (row_box, value_label)
     }
 
-    async fn update_all_data(self: &Rc<Self>) {
-        let details_res = self.service.get_wifi_details().await;
-        match details_res {
-            Ok(d) => {
-                let mut details_guard = self.details.lock().await;
-                *details_guard = Some(d);
-            }
-            Err(e) => {
-                eprintln!("Failed to get network details: {}", e);
-                let mut details_guard = self.details.lock().await;
-                *details_guard = None;
-            }
-        }
-
-        match Self::get_airplane_mode_state().await {
-            Ok(state) => *self.airplane_mode_active.borrow_mut() = state,
-            Err(e) => {
-                eprintln!("Failed to get airplane mode state: {}", e);
-            }
-        }
-
-        self.update_ui().await;
+    fn request_update(self: &Rc<Self>) {
+        let sender = self.command_sender.clone();
+        glib::MainContext::default().spawn_local(async move {
+            let sender_clone = sender.clone();
+            let _ = sender_clone.send(NetworkCommand::GetDetails).await;
+            let _ = sender.send(NetworkCommand::GetAirplaneModeState).await;
+        });
     }
 
-    async fn update_ui(self: &Rc<Self>) {
+    pub fn update_state(self: &Rc<Self>, details_res: Result<WifiDetails, NetworkUtilError>) {
+        match details_res {
+            Ok(d) => {
+                *self.details.borrow_mut() = Some(d);
+            }
+            Err(e) => {
+                eprintln!("[Window] Failed to update network details: {}", e);
+                *self.details.borrow_mut() = None;
+            }
+        }
+        self.update_ui();
+    }
+
+    pub fn update_airplane_state(self: &Rc<Self>, state_res: Result<bool, NetworkUtilError>) {
+        match state_res {
+            Ok(state) => {
+                *self.airplane_mode_active.borrow_mut() = state;
+            }
+            Err(e) => {
+                eprintln!("[Window] Failed to update airplane mode state: {}", e);
+            }
+        }
+        self.update_ui();
+    }
+
+    pub fn update_ap_list(
+        self: &Rc<Self>,
+        aps_res: Result<Vec<AccessPointInfo>, NetworkUtilError>,
+    ) {
+        match aps_res {
+            Ok(aps) => {
+                *self.access_points.borrow_mut() = aps;
+            }
+            Err(e) => {
+                eprintln!("[Window] Failed to update access points: {}", e);
+                self.access_points.borrow_mut().clear();
+            }
+        }
+        self.rebuild_network_list_ui();
+    }
+
+    pub fn handle_wifi_set_result(self: &Rc<Self>, result: Result<(), NetworkUtilError>) {
+        if let Err(e) = result {
+            eprintln!("[Window] Failed to set Wi-Fi state via actor: {}", e);
+        }
+        self.request_update();
+        self.set_controls_sensitive(true);
+    }
+
+    pub fn handle_airplane_set_result(self: &Rc<Self>, result: Result<(), NetworkUtilError>) {
+        if let Err(e) = result {
+            eprintln!(
+                "[Window] Failed to set Airplane Mode state via actor: {}",
+                e
+            );
+        }
+        self.request_update();
+        self.set_controls_sensitive(true);
+    }
+
+    pub fn handle_connect_result(self: &Rc<Self>, result: Result<(), NetworkUtilError>) {
+        if let Err(e) = result {
+            eprintln!("[Window] Failed to connect via actor: {}", e);
+        }
+        self.request_update();
+        self.rebuild_network_list_ui();
+    }
+
+    fn update_ui(self: &Rc<Self>) {
         let ui_opt = self.ui_elements.borrow();
         let ui = match ui_opt.as_ref() {
             Some(ui) => ui,
             None => return,
         };
-        let details_guard = self.details.lock().await;
-        let details = details_guard.as_ref();
+        let details_opt = self.details.borrow();
+        let details = details_opt.as_ref();
         let airplane_mode = *self.airplane_mode_active.borrow();
 
         let is_wifi_enabled = details.map_or(false, |d| d.enabled);
@@ -574,11 +562,7 @@ impl NetworkWindow {
         }
 
         let controls_sensitive = !airplane_mode;
-        ui.main_box.set_sensitive(controls_sensitive);
-        ui.wifi_toggle_button.set_sensitive(controls_sensitive);
-        ui.wifi_switch.set_sensitive(controls_sensitive);
-        ui.airplane_toggle_button.set_sensitive(true);
-        ui.airplane_switch.set_sensitive(true);
+        self.set_controls_sensitive(controls_sensitive);
 
         if let Some(d) = details {
             if airplane_mode {
@@ -623,34 +607,6 @@ impl NetworkWindow {
         }
     }
 
-    async fn update_switches_state(self: &Rc<Self>) {
-        if let Some(ui) = self.ui_elements.borrow().as_ref() {
-            let details_guard = self.details.lock().await;
-            let is_wifi_enabled = details_guard.as_ref().map_or(false, |d| d.enabled);
-            ui.wifi_switch.set_state(is_wifi_enabled);
-            if is_wifi_enabled {
-                ui.wifi_toggle_button.add_css_class("active");
-            } else {
-                ui.wifi_toggle_button.remove_css_class("active");
-            }
-
-            match Self::get_airplane_mode_state().await {
-                Ok(state) => {
-                    *self.airplane_mode_active.borrow_mut() = state;
-                    ui.airplane_switch.set_state(state);
-                    if state {
-                        ui.airplane_toggle_button.add_css_class("active");
-                    } else {
-                        ui.airplane_toggle_button.remove_css_class("active");
-                    }
-                }
-                Err(e) => {
-                    eprintln!("Failed to get airplane mode state for switch update: {}", e);
-                }
-            }
-        }
-    }
-
     fn set_controls_sensitive(self: &Rc<Self>, sensitive: bool) {
         if let Some(ui) = self.ui_elements.borrow().as_ref() {
             let airplane_mode = *self.airplane_mode_active.borrow();
@@ -677,31 +633,7 @@ impl NetworkWindow {
         }
     }
 
-    async fn update_access_points_list(self: &Rc<Self>) {
-        if !*self.networks_visible.borrow() {
-            self.set_scanning_state(false);
-            return;
-        }
-        self.set_scanning_state(true);
-        match self.service.get_access_points().await {
-            Ok(aps) => {
-                let mut ap_guard = self.access_points.lock().await;
-                *ap_guard = aps;
-                drop(ap_guard);
-                self.rebuild_network_list_ui().await;
-            }
-            Err(e) => {
-                eprintln!("[Scan] Failed to get access points: {}", e);
-                let mut ap_guard = self.access_points.lock().await;
-                ap_guard.clear();
-                drop(ap_guard);
-                self.rebuild_network_list_ui().await;
-            }
-        }
-        self.set_scanning_state(false);
-    }
-
-    async fn rebuild_network_list_ui(self: &Rc<Self>) {
+    fn rebuild_network_list_ui(self: &Rc<Self>) {
         let weak_self = Rc::downgrade(self);
         glib::idle_add_local_once(move || {
             if let Some(s) = weak_self.upgrade() {
@@ -710,10 +642,7 @@ impl NetworkWindow {
                         ui_inner.networks_list_box.remove(&child);
                     }
 
-                    let ap_guard = match s.access_points.try_lock() {
-                        Ok(guard) => guard,
-                        Err(_) => return,
-                    };
+                    let ap_guard = s.access_points.borrow();
 
                     if ap_guard.is_empty() {
                         let msg = if *s.is_scanning.borrow() {
@@ -729,20 +658,18 @@ impl NetworkWindow {
                             .margin_bottom(20)
                             .build();
                         ui_inner.networks_list_box.append(&label);
-                        return;
-                    }
+                    } else {
+                        let details_guard = s.details.borrow();
+                        let device_path =
+                            details_guard.as_ref().and_then(|d| d.device_path.clone());
+                        drop(details_guard);
 
-                    let details_guard = match s.details.try_lock() {
-                        Ok(guard) => guard,
-                        Err(_) => return,
-                    };
-                    let device_path = details_guard.as_ref().and_then(|d| d.device_path.clone());
-                    drop(details_guard);
-
-                    for ap in ap_guard.iter() {
-                        let ap_button = s.create_ap_button(ap, device_path.as_ref());
-                        ui_inner.networks_list_box.append(&ap_button);
+                        for ap in ap_guard.iter() {
+                            let ap_button = s.create_ap_button(ap, device_path.as_ref());
+                            ui_inner.networks_list_box.append(&ap_button);
+                        }
                     }
+                    s.set_scanning_state(false);
                 }
             }
         });
@@ -782,46 +709,27 @@ impl NetworkWindow {
             button.add_css_class("active");
         }
 
-        let weak_self = Rc::downgrade(self);
+        let command_sender_clone = self.command_sender.clone();
         let ap_path = ap.path.clone();
         let device_path_clone = device_path.cloned();
 
         button.connect_clicked(move |btn| {
-            if let Some(window) = weak_self.upgrade() {
-                if let Some(dev_path) = &device_path_clone {
-                    btn.set_sensitive(false);
-                    let service = window.service.clone();
-                    let ap_path_clone = ap_path.clone();
-                    let dev_path_clone = dev_path.clone();
-                    let weak_btn = btn.downgrade();
-                    let weak_self_async = weak_self.clone();
+            if let Some(dev_path) = &device_path_clone {
+                btn.set_sensitive(false);
+                let sender = command_sender_clone.clone();
+                let ap_path_clone = ap_path.clone();
+                let dev_path_clone = dev_path.clone();
 
-                    glib::MainContext::default().spawn_local(async move {
-                        println!(
-                            "Attempting connection to AP: {:?}, Device: {:?}",
-                            ap_path_clone, dev_path_clone
-                        );
-                        match service
-                            .connect_to_network(&ap_path_clone, &dev_path_clone)
-                            .await
-                        {
-                            Ok(_) => {
-                                println!("Connection initiated (may require agent)");
-                            }
-                            Err(e) => {
-                                eprintln!("Failed to connect: {}", e);
-                                if let Some(b) = weak_btn.upgrade() {
-                                    b.set_sensitive(true);
-                                }
-                            }
-                        }
-                        if let Some(w) = weak_self_async.upgrade() {
-                            w.update_all_data().await;
-                        }
-                    });
-                } else {
-                    eprintln!("Cannot connect: Wi-Fi device path unknown.");
-                }
+                glib::MainContext::default().spawn_local(async move {
+                    let _ = sender
+                        .send(NetworkCommand::ConnectToNetwork {
+                            ap_path: ap_path_clone,
+                            device_path: dev_path_clone,
+                        })
+                        .await;
+                });
+            } else {
+                eprintln!("Cannot connect: Wi-Fi device path unknown.");
             }
         });
 
@@ -843,7 +751,7 @@ impl NetworkWindow {
                 let weak_self = Rc::downgrade(self);
                 glib::idle_add_local_once(move || {
                     if let Some(s) = weak_self.upgrade() {
-                        let _ = s.rebuild_network_list_ui();
+                        s.rebuild_network_list_ui();
                     }
                 });
             }
@@ -858,29 +766,13 @@ impl NetworkWindow {
             return;
         }
 
-        let weak_self = Rc::downgrade(self);
-        let service = self.service.clone();
         self.set_scanning_state(true);
-
+        let sender = self.command_sender.clone();
         glib::MainContext::default().spawn_local(async move {
-            match service.request_scan().await {
-                Ok(_) => {
-                    tokio::time::sleep(SCAN_RESULT_DELAY).await;
-                    if let Some(s) = weak_self.upgrade() {
-                        if *s.networks_visible.borrow() {
-                            s.update_access_points_list().await;
-                        } else {
-                            s.set_scanning_state(false);
-                        }
-                    }
-                }
-                Err(e) => {
-                    eprintln!("[Scan] Failed to request scan: {}", e);
-                    if let Some(s) = weak_self.upgrade() {
-                        s.set_scanning_state(false);
-                    }
-                }
-            }
+            let sender_clone = sender.clone();
+            let _ = sender_clone.send(NetworkCommand::RequestScan).await;
+            tokio::time::sleep(SCAN_RESULT_DELAY).await;
+            let _ = sender.send(NetworkCommand::GetAccessPoints).await;
         });
     }
 
@@ -890,14 +782,10 @@ impl NetworkWindow {
         }
         *self.polling_active.borrow_mut() = true;
 
-        let weak_self_init = Rc::downgrade(self);
-        glib::MainContext::default().spawn_local(async move {
-            if let Some(s) = weak_self_init.upgrade() {
-                s.update_all_data().await;
-            }
-        });
+        self.request_update();
 
         let weak_self = Rc::downgrade(self);
+        let update_source_id_clone = self.update_source_id.clone();
         let id = glib::timeout_add_local(REFRESH_INTERVAL_WINDOW, move || {
             if let Some(inner_self) = weak_self.upgrade() {
                 if !inner_self.popover.is_visible() {
@@ -905,16 +793,13 @@ impl NetworkWindow {
                     *inner_self.update_source_id.borrow_mut() = None;
                     return glib::ControlFlow::Break;
                 }
-                let s_clone = inner_self.clone();
-                glib::MainContext::default().spawn_local(async move {
-                    s_clone.update_all_data().await;
-                });
+                inner_self.request_update();
                 glib::ControlFlow::Continue
             } else {
                 glib::ControlFlow::Break
             }
         });
-        *self.update_source_id.borrow_mut() = Some(id);
+        *update_source_id_clone.borrow_mut() = Some(id);
 
         if *self.networks_visible.borrow() {
             self.start_scan_timer();
@@ -934,6 +819,7 @@ impl NetworkWindow {
             return;
         }
         let weak_self = Rc::downgrade(self);
+        let scan_source_id_clone = self.scan_source_id.clone();
         let id = glib::timeout_add_local(SCAN_INTERVAL, move || {
             if let Some(inner_self) = weak_self.upgrade() {
                 if !inner_self.popover.is_visible() || !*inner_self.networks_visible.borrow() {
@@ -946,7 +832,7 @@ impl NetworkWindow {
                 glib::ControlFlow::Break
             }
         });
-        *self.scan_source_id.borrow_mut() = Some(id);
+        *scan_source_id_clone.borrow_mut() = Some(id);
     }
 
     pub fn stop_scan_timer(self: &Rc<Self>) {
@@ -981,6 +867,25 @@ impl Drop for NetworkWindow {
         }
         if let Some(id) = self.scan_source_id.borrow_mut().take() {
             id.remove();
+        }
+    }
+}
+
+impl Clone for NetworkWindow {
+    fn clone(&self) -> Self {
+        Self {
+            popover: self.popover.clone(),
+            _config: self._config.clone(),
+            command_sender: self.command_sender.clone(),
+            details: self.details.clone(),
+            access_points: self.access_points.clone(),
+            ui_elements: self.ui_elements.clone(),
+            is_scanning: self.is_scanning.clone(),
+            networks_visible: self.networks_visible.clone(),
+            polling_active: self.polling_active.clone(),
+            airplane_mode_active: self.airplane_mode_active.clone(),
+            update_source_id: self.update_source_id.clone(),
+            scan_source_id: self.scan_source_id.clone(),
         }
     }
 }

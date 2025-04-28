@@ -11,10 +11,11 @@ pub struct ActiveClientWidget {
     container: Box,
     app_id_label: Label,
     title_label: Label,
+    max_text_length: usize,
 }
 
 impl ActiveClientWidget {
-    pub fn new() -> Self {
+    pub fn new(max_text_length: usize) -> Self {
         let app_id_label = Label::builder()
             .halign(Align::Start)
             .xalign(0.0)
@@ -42,6 +43,7 @@ impl ActiveClientWidget {
             container,
             app_id_label,
             title_label,
+            max_text_length,
         };
 
         widget.update_widget_info();
@@ -50,12 +52,23 @@ impl ActiveClientWidget {
         widget
     }
 
+    fn truncate_text(&self, text: &str) -> String {
+        if text.chars().count() > self.max_text_length {
+            let mut truncated: String = text.chars().take(self.max_text_length).collect();
+            truncated.push_str("…");
+            truncated
+        } else {
+            text.to_string()
+        }
+    }
+
     fn update_labels(&self, window_info: Result<Option<Window>, NiriError>) {
         match window_info {
             Ok(Some(window)) => {
-                self.app_id_label
-                    .set_text(&window.app_id.unwrap_or_default());
-                self.title_label.set_text(&window.title.unwrap_or_default());
+                let app_id = window.app_id.unwrap_or_default();
+                let title = window.title.unwrap_or_default();
+                self.app_id_label.set_text(&self.truncate_text(&app_id));
+                self.title_label.set_text(&self.truncate_text(&title));
                 self.container.set_visible(true);
             }
             Ok(None) => {
@@ -80,14 +93,27 @@ impl ActiveClientWidget {
         let container = self.container.clone();
         let app_id_label = self.app_id_label.clone();
         let title_label = self.title_label.clone();
+        let max_len = self.max_text_length;
 
         glib::timeout_add_local(UPDATE_INTERVAL, move || {
             let update_result = niri::get_focused_window();
 
+            let truncate = |text: &str| -> String {
+                if text.chars().count() > max_len {
+                    let mut truncated: String = text.chars().take(max_len).collect();
+                    truncated.push_str("…");
+                    truncated
+                } else {
+                    text.to_string()
+                }
+            };
+
             match update_result {
                 Ok(Some(window)) => {
-                    app_id_label.set_text(&window.app_id.unwrap_or_default());
-                    title_label.set_text(&window.title.unwrap_or_default());
+                    let app_id = window.app_id.unwrap_or_default();
+                    let title = window.title.unwrap_or_default();
+                    app_id_label.set_text(&truncate(&app_id));
+                    title_label.set_text(&truncate(&title));
                     container.set_visible(true);
                 }
                 Ok(None) => {
@@ -107,11 +133,5 @@ impl ActiveClientWidget {
 
     pub fn widget(&self) -> &impl IsA<Widget> {
         &self.container
-    }
-}
-
-impl Default for ActiveClientWidget {
-    fn default() -> Self {
-        Self::new()
     }
 }

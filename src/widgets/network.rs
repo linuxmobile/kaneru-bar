@@ -1,21 +1,21 @@
-use crate::utils::network::{NetworkService, NetworkUtilError, WifiDetails};
+use crate::utils::network::{NetworkCommand, WifiDetails};
 use gtk4::prelude::*;
 use gtk4::{glib, Align, Box as GtkBox, Button, Image, Orientation};
-use std::{cell::RefCell, rc::Rc, sync::Arc, time::Duration};
-use tokio::sync::Mutex;
+use std::{cell::RefCell, rc::Rc, time::Duration};
+use tokio::sync::mpsc;
 
 const REFRESH_INTERVAL: Duration = Duration::from_secs(5);
 
 pub struct NetworkWidget {
     container: Button,
     icon: Image,
-    service: Arc<NetworkService>,
-    details: Arc<Mutex<Option<WifiDetails>>>,
-    _update_source_id: RefCell<Option<glib::SourceId>>,
+    command_sender: mpsc::Sender<NetworkCommand>,
+    details: Rc<RefCell<Option<WifiDetails>>>,
+    _update_source_id: Rc<RefCell<Option<glib::SourceId>>>,
 }
 
 impl NetworkWidget {
-    pub fn new(service: Arc<NetworkService>) -> Rc<Self> {
+    pub fn new(command_sender: mpsc::Sender<NetworkCommand>) -> Rc<Self> {
         let icon = Image::builder()
             .icon_name("network-wireless-offline-symbolic")
             .build();
@@ -37,9 +37,9 @@ impl NetworkWidget {
         let widget = Rc::new(Self {
             container,
             icon,
-            service: service.clone(),
-            details: Arc::new(Mutex::new(None)),
-            _update_source_id: RefCell::new(None),
+            command_sender: command_sender.clone(),
+            details: Rc::new(RefCell::new(None)),
+            _update_source_id: Rc::new(RefCell::new(None)),
         });
 
         let widget_clone = widget.clone();
@@ -47,46 +47,50 @@ impl NetworkWidget {
             let _ = &widget_clone;
         });
 
-        let weak_self = Rc::downgrade(&widget);
+        Self::schedule_initial_update(&widget);
+        Self::schedule_periodic_updates(&widget);
 
-        let weak_self_init = weak_self.clone();
+        widget
+    }
+
+    fn schedule_initial_update(widget_rc: &Rc<Self>) {
+        let sender = widget_rc.command_sender.clone();
         glib::MainContext::default().spawn_local(async move {
-            if let Some(s) = weak_self_init.upgrade() {
-                s.update_network_details(true).await;
-            }
+            let _ = sender.send(NetworkCommand::GetDetails).await;
         });
+    }
 
+    fn schedule_periodic_updates(widget_rc: &Rc<Self>) {
+        let weak_self = Rc::downgrade(widget_rc);
+        let update_source_id_clone = widget_rc._update_source_id.clone();
         let source_id = glib::timeout_add_local(REFRESH_INTERVAL, move || {
             if let Some(strong_self) = weak_self.upgrade() {
-                let s_clone = strong_self.clone();
+                let sender = strong_self.command_sender.clone();
                 glib::MainContext::default().spawn_local(async move {
-                    s_clone.update_network_details(false).await;
+                    let _ = sender.send(NetworkCommand::GetDetails).await;
                 });
                 glib::ControlFlow::Continue
             } else {
                 glib::ControlFlow::Break
             }
         });
-        *widget._update_source_id.borrow_mut() = Some(source_id);
-
-        widget
+        *update_source_id_clone.borrow_mut() = Some(source_id);
     }
 
-    async fn update_network_details(self: &Rc<Self>, is_initial: bool) {
-        match self.service.get_wifi_details().await {
+    pub fn update_state(
+        &self,
+        details_res: Result<WifiDetails, crate::utils::network::NetworkUtilError>,
+    ) {
+        match details_res {
             Ok(d) => {
-                let mut details_guard = self.details.lock().await;
-                *details_guard = Some(d);
-                self.update_ui_from_details(&details_guard);
+                *self.details.borrow_mut() = Some(d);
+                self.update_ui_from_state();
             }
             Err(e) => {
-                if is_initial {
-                    eprintln!("Initial network fetch failed: {}", e);
-                    self.set_error_state();
-                } else {
-                    println!("Network update failed: {}", e);
-                }
-                if matches!(e, NetworkUtilError::NoWifiDevice) {
+                eprintln!("[Widget] Failed to update network state: {}", e);
+                *self.details.borrow_mut() = None;
+                self.set_error_state();
+                if matches!(e, crate::utils::network::NetworkUtilError::NoWifiDevice) {
                     self.container.set_visible(false);
                 } else {
                     self.container.set_visible(true);
@@ -95,8 +99,9 @@ impl NetworkWidget {
         }
     }
 
-    fn update_ui_from_details(&self, details_opt: &Option<WifiDetails>) {
-        if let Some(details) = details_opt {
+    fn update_ui_from_state(&self) {
+        let details_opt = self.details.borrow();
+        if let Some(details) = details_opt.as_ref() {
             self.icon.set_icon_name(Some(&details.icon_name));
             self.container.set_visible(true);
         } else {

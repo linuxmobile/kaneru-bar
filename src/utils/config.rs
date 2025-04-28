@@ -55,6 +55,8 @@ pub struct BarConfig {
     pub distro_icon_override: Option<String>,
     pub clock_format: Option<String>,
     pub notification_position: NotificationPosition,
+    #[serde(rename = "active-client-max-length")]
+    pub active_client_max_length: usize,
     pub battery: BatteryConfig,
     pub network: NetworkConfig,
 }
@@ -69,6 +71,7 @@ impl Default for BarConfig {
             distro_icon_override: None,
             clock_format: Some("%A %e, %H:%M".to_string()),
             notification_position: NotificationPosition::TopRight,
+            active_client_max_length: 20,
             battery: BatteryConfig::default(),
             network: NetworkConfig::default(),
         }
