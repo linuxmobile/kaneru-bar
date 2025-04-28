@@ -15,6 +15,7 @@ popover.DatePopupWindow {
       border-radius: to-rem(8px);
       background-color: gtkalpha($surface1, 0.6);
       border: none;
+      outline: none;
       transition: background-color 150ms ease;
 
       &:hover {
@@ -111,6 +112,7 @@ popover.DatePopupWindow {
       border-radius: to-rem(4px);
       background-color: transparent;
       border: none;
+      outline: none;
       transition: background-color 150ms ease;
 
       &:hover {
