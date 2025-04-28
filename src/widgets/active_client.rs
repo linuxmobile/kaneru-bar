@@ -5,7 +5,7 @@ use gtk4::{Align, Box, Label, Orientation, Widget};
 use pango::EllipsizeMode;
 use std::time::Duration;
 
-const UPDATE_INTERVAL: Duration = Duration::from_secs(1);
+const UPDATE_INTERVAL: Duration = Duration::from_millis(500);
 
 pub struct ActiveClientWidget {
     container: Box,
