@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <gresources>
   <gresource prefix="/com/github/linuxmobile/kaneru">
-    <file compressed="true" preprocess="xml-stripblanks" alias="style.css">style.css</file>
+    <file compressed="true" alias="style.css">style.css</file>
   </gresource>
 </gresources>
