@@ -63,10 +63,12 @@ impl NetworkWidget {
     fn schedule_periodic_updates(widget_rc: &Rc<Self>) {
         let weak_self = Rc::downgrade(widget_rc);
         let update_source_id_clone = widget_rc._update_source_id.clone();
+        let sender_clone = widget_rc.command_sender.clone();
+
         let source_id = glib::timeout_add_local(REFRESH_INTERVAL, move || {
-            if let Some(strong_self) = weak_self.upgrade() {
-                let sender = strong_self.command_sender.clone();
-                glib::MainContext::default().spawn_local(async move {
+            if let Some(_strong_self) = weak_self.upgrade() {
+                let sender = sender_clone.clone();
+                tokio::spawn(async move {
                     let _ = sender.send(NetworkCommand::GetDetails).await;
                 });
                 glib::ControlFlow::Continue

@@ -26,7 +26,7 @@ const APP_ID: &str = "com.github.linuxmobile.kaneru";
 
 async fn network_actor_task(
     mut command_rx: mpsc::Receiver<NetworkCommand>,
-    result_tx: mpsc::Sender<NetworkResult>,
+    result_tx: mpsc::UnboundedSender<NetworkResult>,
     service: Arc<NetworkService>,
 ) {
     while let Some(command) = command_rx.recv().await {
@@ -52,72 +52,106 @@ async fn network_actor_task(
                 device_path,
             } => NetworkResult::Connected(service.connect_to_network(&ap_path, &device_path).await),
         };
-        if result_tx.send(result).await.is_err() {
+
+        if result_tx.send(result).is_err() {
             break;
         }
     }
 }
 
 fn setup_network_result_handler(
-    mut result_rx: mpsc::Receiver<NetworkResult>,
-    network_widget_weak: Weak<NetworkWidget>,
-    network_window_weak: Weak<NetworkWindow>,
+    rx: mpsc::UnboundedReceiver<NetworkResult>,
+    widget_weak: Weak<NetworkWidget>,
+    window_weak: Weak<NetworkWindow>,
 ) {
-    glib::MainContext::default().spawn_local(async move {
-        while let Some(result) = result_rx.recv().await {
-            match result {
-                NetworkResult::Details(details_res) => {
-                    let details_for_window = details_res.clone();
+    let rx = Rc::new(RefCell::new(rx));
 
-                    if let Some(widget) = network_widget_weak.upgrade() {
-                        widget.update_state(details_res);
-                    }
-                    if let Some(window) = network_window_weak.upgrade() {
-                        window.update_state(details_for_window);
-                    }
+    glib::timeout_add_local(std::time::Duration::from_millis(100), move || {
+        let mut rx_guard = rx.borrow_mut();
+
+        for _ in 0..5 {
+            match rx_guard.try_recv() {
+                Ok(result) => {
+                    let result_clone = result;
+                    let widget_weak_clone = widget_weak.clone();
+                    let window_weak_clone = window_weak.clone();
+
+                    glib::idle_add_local_once(move || {
+                        process_network_result(
+                            result_clone,
+                            &widget_weak_clone,
+                            &window_weak_clone,
+                        );
+                    });
                 }
-                NetworkResult::AccessPoints(aps_res) => {
-                    if let Some(window) = network_window_weak.upgrade() {
-                        window.update_ap_list(aps_res);
-                    }
+                Err(tokio::sync::mpsc::error::TryRecvError::Empty) => {
+                    break;
                 }
-                NetworkResult::ScanRequested(res) => {
-                    if let Err(e) = res {
-                        eprintln!("[Handler] Scan request failed: {}", e);
-                        if let Some(window) = network_window_weak.upgrade() {
-                            window.update_ap_list(Err(e));
-                        }
-                    }
-                }
-                NetworkResult::WifiSet(res) => {
-                    if let Some(window) = network_window_weak.upgrade() {
-                        window.handle_wifi_set_result(res);
-                    } else if let Err(e) = res {
-                        eprintln!("[Handler] WifiSet failed, window gone: {}", e);
-                    }
-                }
-                NetworkResult::AirplaneModeSet(res) => {
-                    if let Some(window) = network_window_weak.upgrade() {
-                        window.handle_airplane_set_result(res);
-                    } else if let Err(e) = res {
-                        eprintln!("[Handler] AirplaneSet failed, window gone: {}", e);
-                    }
-                }
-                NetworkResult::AirplaneModeState(res) => {
-                    if let Some(window) = network_window_weak.upgrade() {
-                        window.update_airplane_state(res);
-                    }
-                }
-                NetworkResult::Connected(res) => {
-                    if let Some(window) = network_window_weak.upgrade() {
-                        window.handle_connect_result(res);
-                    } else if let Err(e) = res {
-                        eprintln!("[Handler] Connect failed, window gone: {}", e);
-                    }
+                Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
+                    return glib::ControlFlow::Break;
                 }
             }
         }
+
+        glib::ControlFlow::Continue
     });
+}
+
+fn process_network_result(
+    result: NetworkResult,
+    widget_weak: &Weak<NetworkWidget>,
+    window_weak: &Weak<NetworkWindow>,
+) {
+    match result {
+        NetworkResult::Details(details_res) => {
+            let details_for_window = details_res.clone();
+            if let Some(widget) = widget_weak.upgrade() {
+                widget.update_state(details_res);
+            }
+            if let Some(window) = window_weak.upgrade() {
+                window.update_state(details_for_window);
+            }
+        }
+        NetworkResult::AccessPoints(aps_res) => {
+            if let Some(window) = window_weak.upgrade() {
+                window.update_ap_list(aps_res);
+            }
+        }
+        NetworkResult::ScanRequested(res) => {
+            if let Err(e) = res {
+                eprintln!("[Handler] Scan request failed: {}", e);
+                if let Some(window) = window_weak.upgrade() {
+                    window.update_ap_list(Err(e));
+                }
+            }
+        }
+        NetworkResult::WifiSet(res) => {
+            if let Some(window) = window_weak.upgrade() {
+                window.handle_wifi_set_result(res);
+            } else if let Err(e) = res {
+                eprintln!("[Handler] WifiSet failed, window gone: {}", e);
+            }
+        }
+        NetworkResult::AirplaneModeSet(res) => {
+            if let Some(window) = window_weak.upgrade() {
+                window.handle_airplane_set_result(res);
+            } else if let Err(e) = res {
+                eprintln!("[Handler] AirplaneSet failed, window gone: {}", e);
+            }
+        }
+        NetworkResult::AirplaneModeState(res) => {
+            if let Some(window) = window_weak.upgrade() {
+                window.update_airplane_state(res);
+            }
+        }
+        NetworkResult::Connected(res) => {
+            if let Some(window) = window_weak.upgrade() {
+                window.handle_connect_result(res);
+            } else if let Err(e) = res {
+                eprintln!("[Handler] Connect failed, window gone: {}", e);
+            }
+        }
+    }
 }
 
 #[tokio::main]
@@ -148,7 +182,8 @@ async fn main() -> glib::ExitCode {
     ));
 
     let (net_command_tx, net_command_rx) = mpsc::channel::<NetworkCommand>(32);
-    let (net_result_tx, net_result_rx) = mpsc::channel::<NetworkResult>(32);
+
+    let (net_result_tx, net_result_rx) = mpsc::unbounded_channel::<NetworkResult>();
 
     let network_service_result: Result<Arc<NetworkService>, NetworkUtilError> =
         NetworkService::new().await;
@@ -210,6 +245,7 @@ async fn main() -> glib::ExitCode {
                     .borrow()
                     .as_ref()
                     .map_or(Weak::new(), |rc| Rc::downgrade(rc));
+
                 let nw_window_weak = network_window_holder_clone
                     .borrow()
                     .as_ref()

@@ -15,9 +15,9 @@ use zbus::zvariant::OwnedObjectPath;
 const REFRESH_INTERVAL_WINDOW: Duration = Duration::from_secs(10);
 const SCAN_INTERVAL: Duration = Duration::from_secs(20);
 const SCAN_RESULT_DELAY: Duration = Duration::from_secs(2);
+const AP_BATCH_SIZE: usize = 5;
 
 struct NetworkWindowUI {
-    main_box: GtkBox,
     airplane_toggle_button: Button,
     airplane_switch: Switch,
     wifi_toggle_button: Button,
@@ -48,6 +48,7 @@ pub struct NetworkWindow {
     airplane_mode_active: Rc<RefCell<bool>>,
     update_source_id: Rc<RefCell<Option<glib::SourceId>>>,
     scan_source_id: Rc<RefCell<Option<glib::SourceId>>>,
+    rebuild_state: Rc<RefCell<Option<(glib::SourceId, usize)>>>,
 }
 
 impl NetworkWindow {
@@ -67,6 +68,7 @@ impl NetworkWindow {
         let networks_visible = Rc::new(RefCell::new(false));
         let polling_active = Rc::new(RefCell::new(false));
         let airplane_mode_active = Rc::new(RefCell::new(false));
+        let rebuild_state = Rc::new(RefCell::new(None));
 
         let window = Rc::new(Self {
             popover: popover.clone(),
@@ -81,6 +83,7 @@ impl NetworkWindow {
             airplane_mode_active: airplane_mode_active.clone(),
             update_source_id: update_source_id.clone(),
             scan_source_id: scan_source_id.clone(),
+            rebuild_state: rebuild_state.clone(),
         });
 
         let main_box = GtkBox::builder()
@@ -123,7 +126,6 @@ impl NetworkWindow {
         popover.set_child(Some(&main_box));
 
         *ui_elements.borrow_mut() = Some(NetworkWindowUI {
-            main_box,
             airplane_toggle_button,
             airplane_switch,
             wifi_toggle_button,
@@ -391,6 +393,7 @@ impl NetworkWindow {
                 } else {
                     window.stop_scan_timer();
                     window.set_scanning_state(false);
+                    window.cancel_rebuild();
                 }
             }
         });
@@ -505,7 +508,11 @@ impl NetworkWindow {
                 self.access_points.borrow_mut().clear();
             }
         }
-        self.rebuild_network_list_ui();
+
+        if *self.networks_visible.borrow() {
+            self.rebuild_network_list_ui();
+        }
+        self.set_scanning_state(false);
     }
 
     pub fn handle_wifi_set_result(self: &Rc<Self>, result: Result<(), NetworkUtilError>) {
@@ -612,67 +619,131 @@ impl NetworkWindow {
             let airplane_mode = *self.airplane_mode_active.borrow();
             let overall_sensitive = sensitive && !airplane_mode;
 
-            ui.main_box.set_sensitive(overall_sensitive);
-
+            ui.airplane_toggle_button.set_sensitive(sensitive);
+            ui.airplane_switch.set_sensitive(sensitive);
             ui.wifi_toggle_button.set_sensitive(overall_sensitive);
             ui.wifi_switch.set_sensitive(overall_sensitive);
 
-            ui.airplane_toggle_button.set_sensitive(sensitive);
-            ui.airplane_switch.set_sensitive(sensitive);
+            if let Some(current_section) = ui.current_details_box.parent() {
+                current_section.set_sensitive(overall_sensitive);
+            }
 
             if let Some(available_networks_button) = ui
                 .networks_revealer
                 .parent()
-                .and_then(|p| p.parent())
                 .and_then(|p| p.first_child())
                 .and_then(|w| w.downcast::<Button>().ok())
             {
                 available_networks_button.set_sensitive(overall_sensitive);
             }
             ui.networks_list_box.set_sensitive(overall_sensitive);
+            if let Some(settings_section) =
+                ui.networks_revealer.parent().and_then(|p| p.next_sibling())
+            {
+                settings_section.set_sensitive(overall_sensitive);
+            }
+        }
+    }
+
+    fn cancel_rebuild(self: &Rc<Self>) {
+        if let Some((id, _)) = self.rebuild_state.borrow_mut().take() {
+            id.remove();
         }
     }
 
     fn rebuild_network_list_ui(self: &Rc<Self>) {
-        let weak_self = Rc::downgrade(self);
-        glib::idle_add_local_once(move || {
-            if let Some(s) = weak_self.upgrade() {
-                if let Some(ui_inner) = s.ui_elements.borrow().as_ref() {
-                    while let Some(child) = ui_inner.networks_list_box.first_child() {
-                        ui_inner.networks_list_box.remove(&child);
-                    }
+        self.cancel_rebuild();
 
-                    let ap_guard = s.access_points.borrow();
+        let ui_opt = self.ui_elements.borrow();
+        let list_box = match ui_opt.as_ref().map(|ui| ui.networks_list_box.clone()) {
+            Some(lb) => lb,
+            None => return,
+        };
 
-                    if ap_guard.is_empty() {
-                        let msg = if *s.is_scanning.borrow() {
-                            "Scanning..."
-                        } else {
-                            "No networks found"
-                        };
-                        let label = Label::builder()
-                            .label(msg)
-                            .halign(Align::Center)
-                            .css_classes(vec!["dim-label"])
-                            .margin_top(20)
-                            .margin_bottom(20)
-                            .build();
-                        ui_inner.networks_list_box.append(&label);
-                    } else {
-                        let details_guard = s.details.borrow();
-                        let device_path =
-                            details_guard.as_ref().and_then(|d| d.device_path.clone());
+        while let Some(child) = list_box.first_child() {
+            list_box.remove(&child);
+        }
+
+        let aps_empty = self.access_points.borrow().is_empty();
+
+        if aps_empty {
+            let msg = if *self.is_scanning.borrow() {
+                "Scanning..."
+            } else {
+                "No networks found"
+            };
+            let label = Label::builder()
+                .label(msg)
+                .halign(Align::Center)
+                .css_classes(vec!["dim-label"])
+                .margin_top(20)
+                .margin_bottom(20)
+                .build();
+            list_box.append(&label);
+        } else {
+            let weak_self = Rc::downgrade(self);
+            let list_box_clone = list_box.clone();
+
+            let id = glib::idle_add_local(move || {
+                if let Some(s) = weak_self.upgrade() {
+                    s.add_ap_buttons_batch(list_box_clone.clone())
+                } else {
+                    glib::ControlFlow::Break
+                }
+            });
+            *self.rebuild_state.borrow_mut() = Some((id, 0));
+        }
+    }
+
+    fn add_ap_buttons_batch(self: &Rc<Self>, list_box: GtkBox) -> glib::ControlFlow {
+        let mut rebuild_state_guard = self.rebuild_state.borrow_mut();
+
+        if let Some(state) = rebuild_state_guard.as_mut() {
+            let start_index = state.1;
+
+            let aps = self.access_points.borrow();
+            let details_guard = self.details.borrow();
+            let device_path = details_guard.as_ref().and_then(|d| d.device_path.clone());
+
+            let end_index = (start_index + AP_BATCH_SIZE).min(aps.len());
+            let mut item_added = false;
+
+            for i in start_index..end_index {
+                if let Some(ap) = aps.get(i) {
+                    if !list_box.is_visible() {
+                        drop(aps);
                         drop(details_guard);
-
-                        for ap in ap_guard.iter() {
-                            let ap_button = s.create_ap_button(ap, device_path.as_ref());
-                            ui_inner.networks_list_box.append(&ap_button);
-                        }
+                        drop(rebuild_state_guard);
+                        self.cancel_rebuild();
+                        return glib::ControlFlow::Break;
                     }
-                    s.set_scanning_state(false);
+                    let ap_button = self.create_ap_button(ap, device_path.as_ref());
+                    list_box.append(&ap_button);
+                    item_added = true;
                 }
             }
-        });
+
+            if end_index >= aps.len() {
+                drop(aps);
+                drop(details_guard);
+                drop(rebuild_state_guard);
+                self.cancel_rebuild();
+                glib::ControlFlow::Break
+            } else {
+                state.1 = end_index;
+                if item_added {
+                    glib::ControlFlow::Continue
+                } else {
+                    drop(aps);
+                    drop(details_guard);
+                    drop(rebuild_state_guard);
+                    self.cancel_rebuild();
+                    glib::ControlFlow::Break
+                }
+            }
+        } else {
+            glib::ControlFlow::Break
+        }
     }
 
     fn create_ap_button(
@@ -712,24 +783,27 @@ impl NetworkWindow {
         let command_sender_clone = self.command_sender.clone();
         let ap_path = ap.path.clone();
         let device_path_clone = device_path.cloned();
+        let weak_self = Rc::downgrade(self);
 
         button.connect_clicked(move |btn| {
-            if let Some(dev_path) = &device_path_clone {
-                btn.set_sensitive(false);
-                let sender = command_sender_clone.clone();
-                let ap_path_clone = ap_path.clone();
-                let dev_path_clone = dev_path.clone();
+            if let Some(_s) = weak_self.upgrade() {
+                if let Some(dev_path) = &device_path_clone {
+                    btn.set_sensitive(false);
+                    let sender = command_sender_clone.clone();
+                    let ap_path_clone = ap_path.clone();
+                    let dev_path_clone = dev_path.clone();
 
-                glib::MainContext::default().spawn_local(async move {
-                    let _ = sender
-                        .send(NetworkCommand::ConnectToNetwork {
-                            ap_path: ap_path_clone,
-                            device_path: dev_path_clone,
-                        })
-                        .await;
-                });
-            } else {
-                eprintln!("Cannot connect: Wi-Fi device path unknown.");
+                    glib::MainContext::default().spawn_local(async move {
+                        let _ = sender
+                            .send(NetworkCommand::ConnectToNetwork {
+                                ap_path: ap_path_clone,
+                                device_path: dev_path_clone,
+                            })
+                            .await;
+                    });
+                } else {
+                    eprintln!("Cannot connect: Wi-Fi device path unknown.");
+                }
             }
         });
 
@@ -743,17 +817,17 @@ impl NetworkWindow {
             if scanning {
                 ui.scan_spinner.start();
                 ui.scan_status_label.set_label("Scanning...");
+                if ui.networks_list_box.first_child().is_none() {
+                    self.rebuild_network_list_ui();
+                }
             } else {
                 ui.scan_spinner.stop();
                 ui.scan_status_label.set_label("Available Networks");
-            }
-            if scanning && ui.networks_list_box.first_child().is_none() {
-                let weak_self = Rc::downgrade(self);
-                glib::idle_add_local_once(move || {
-                    if let Some(s) = weak_self.upgrade() {
-                        s.rebuild_network_list_ui();
-                    }
-                });
+                if ui.networks_list_box.first_child().is_none()
+                    && self.access_points.borrow().is_empty()
+                {
+                    self.rebuild_network_list_ui();
+                }
             }
         }
     }
@@ -812,6 +886,7 @@ impl NetworkWindow {
             id.remove();
         }
         self.stop_scan_timer();
+        self.cancel_rebuild();
     }
 
     fn start_scan_timer(self: &Rc<Self>) {
@@ -868,6 +943,9 @@ impl Drop for NetworkWindow {
         if let Some(id) = self.scan_source_id.borrow_mut().take() {
             id.remove();
         }
+        if let Some((id, _)) = self.rebuild_state.borrow_mut().take() {
+            id.remove();
+        }
     }
 }
 
@@ -886,6 +964,7 @@ impl Clone for NetworkWindow {
             airplane_mode_active: self.airplane_mode_active.clone(),
             update_source_id: self.update_source_id.clone(),
             scan_source_id: self.scan_source_id.clone(),
+            rebuild_state: self.rebuild_state.clone(),
         }
     }
 }
