@@ -11,7 +11,11 @@ pub struct DockWindow {
     app: Application,
     config: DockConfig,
     hide_timer: Rc<RefCell<Option<glib::SourceId>>>,
+    trigger_hover: Rc<RefCell<bool>>,
+    dock_hover: Rc<RefCell<bool>>,
 }
+
+
 
 impl DockWindow {
     pub fn new(app: &Application, config: &DockConfig) -> Rc<Self> {
@@ -39,6 +43,8 @@ impl DockWindow {
             app: app.clone(),
             config: config.clone(),
             hide_timer: Rc::new(RefCell::new(None)),
+            trigger_hover: Rc::new(RefCell::new(false)),
+            dock_hover: Rc::new(RefCell::new(false)),
         });
 
         if config.auto_hide {
@@ -104,12 +110,30 @@ impl DockWindow {
     }
 
     fn setup_auto_hide(self: &Rc<Self>, trigger_area: &GtkBox) {
-        let motion_controller = EventControllerMotion::new();
+        let trigger_hover = self.trigger_hover.clone();
+        let dock_hover = self.dock_hover.clone();
+        let dock_weak = Rc::downgrade(self);
 
-        let dock_weak_enter = Rc::downgrade(self);
+        let trigger_hover_enter = trigger_hover.clone();
+        let dock_weak_enter = dock_weak.clone();
+        let motion_controller = EventControllerMotion::new();
         motion_controller.connect_enter(move |_, _, _| {
+            *trigger_hover_enter.borrow_mut() = true;
             if let Some(dock) = dock_weak_enter.upgrade() {
                 dock.reveal();
+            }
+        });
+
+        let trigger_hover_leave = trigger_hover.clone();
+        let dock_hover_leave = dock_hover.clone();
+        let dock_weak_leave = dock_weak.clone();
+        motion_controller.connect_leave(move |_| {
+            *trigger_hover_leave.borrow_mut() = false;
+            let dock_hover = *dock_hover_leave.borrow();
+            if !dock_hover {
+                if let Some(dock) = dock_weak_leave.upgrade() {
+                    dock.schedule_hide_with_hover();
+                }
             }
         });
 
@@ -138,6 +162,9 @@ impl DockWindow {
         let container = GtkBox::new(Orientation::Horizontal, 4);
         container.add_css_class("dock-container");
         container.set_halign(gtk4::Align::Center);
+
+        let dock_hover = self.dock_hover.clone();
+        let trigger_hover = self.trigger_hover.clone();
 
         let app_resolver = AppResolver::new();
 
@@ -307,10 +334,11 @@ impl DockWindow {
         dock_wrapper.append(&container);
         window.set_child(Some(&dock_wrapper));
 
-        let motion_controller = EventControllerMotion::new();
-
+        let dock_hover_enter = dock_hover.clone();
         let dock_weak_enter = Rc::downgrade(self);
+        let motion_controller = EventControllerMotion::new();
         motion_controller.connect_enter(move |_, _, _| {
+            *dock_hover_enter.borrow_mut() = true;
             if let Some(dock) = dock_weak_enter.upgrade() {
                 if let Some(timer_id) = dock.hide_timer.borrow_mut().take() {
                     timer_id.remove();
@@ -318,10 +346,16 @@ impl DockWindow {
             }
         });
 
+        let dock_hover_leave = dock_hover.clone();
+        let trigger_hover_leave = trigger_hover.clone();
         let dock_weak_leave = Rc::downgrade(self);
         motion_controller.connect_leave(move |_| {
-            if let Some(dock) = dock_weak_leave.upgrade() {
-                dock.schedule_hide();
+            *dock_hover_leave.borrow_mut() = false;
+            let trigger_hover_val = *trigger_hover_leave.borrow();
+            if !trigger_hover_val {
+                if let Some(dock) = dock_weak_leave.upgrade() {
+                    dock.schedule_hide_with_hover();
+                }
             }
         });
 
@@ -341,15 +375,22 @@ impl DockWindow {
         }
     }
 
-    fn schedule_hide(self: &Rc<Self>) {
+    fn schedule_hide_with_hover(self: &Rc<Self>) {
         if self.dock_window.borrow().is_some() && self.hide_timer.borrow().is_none() {
             let dock_weak = Rc::downgrade(self);
+            let trigger_hover = self.trigger_hover.clone();
+            let dock_hover = self.dock_hover.clone();
+            let hide_delay = self.config.hide_delay;
             let timer_id = glib::timeout_add_local_once(
-                Duration::from_millis(500),
+                Duration::from_millis(hide_delay as u64),
                 move || {
-                    if let Some(dock) = dock_weak.upgrade() {
-                        dock.hide();
-                        *dock.hide_timer.borrow_mut() = None;
+                    let trigger = *trigger_hover.borrow();
+                    let dock = *dock_hover.borrow();
+                    if !trigger && !dock {
+                        if let Some(dock) = dock_weak.upgrade() {
+                            dock.hide();
+                            *dock.hide_timer.borrow_mut() = None;
+                        }
                     }
                 },
             );
@@ -362,6 +403,8 @@ impl DockWindow {
             window.close();
         }
     }
+
+
 
     pub fn present(&self) {
         if let Some(dock_window) = self.dock_window.borrow().as_ref() {
