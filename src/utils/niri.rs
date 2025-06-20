@@ -25,6 +25,8 @@ pub enum NiriError {
     },
 }
 
+
+
 impl fmt::Display for NiriError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -119,5 +121,16 @@ pub fn get_focused_window() -> Result<Option<Window>, NiriError> {
             _ => None,
         },
         "FocusedWindow",
+    )
+}
+
+pub fn get_windows() -> Result<Vec<Window>, NiriError> {
+    send_request(
+        Request::Windows,
+        |resp| match resp {
+            Response::Windows(windows) => Some(windows),
+            _ => None,
+        },
+        "Windows",
     )
 }

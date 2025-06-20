@@ -32,33 +32,33 @@ popover.NetworkWindow {
           }
 
           &.active {
-            background-color: gtkalpha($overlay2, 0.15);
-            border-color: gtkalpha($overlay2, 0.3);
+            background-color: gtkalpha($onPrimary, 0.15);
+            border-color: gtkalpha($onPrimary, 0.3);
 
             .toggle-icon {
-              color: $overlay2;
+              color: $onPrimary;
             }
 
             .toggle-label {
-              color: $overlay2;
+              color: $onPrimary;
             }
 
             &:hover {
-              background-color: gtkalpha(color.scale($overlay2, $lightness: -10%), 0.25);
-              border-color: gtkalpha($overlay2, 0.4);
+              background-color: gtkalpha(color.scale($onPrimary, $lightness: -10%), 0.25);
+              border-color: gtkalpha($onPrimary, 0.4);
             }
           }
 
           .toggle-icon {
             font-size: to-rem(20px);
             margin-bottom: to-rem(3px);
-            color: $text;
+            color: $onPrimary;
           }
 
           .toggle-label {
             font-size: to-rem(12px);
             font-weight: 500;
-            color: $text;
+            color: $onPrimary;
           }
         }
       }
@@ -74,13 +74,13 @@ popover.NetworkWindow {
 
           icon {
             font-size: to-rem(24px);
-            color: $overlay2;
+            color: $onPrimary;
           }
 
           label {
             font-size: 1.1em;
             font-weight: 600;
-            color: $text;
+            color: $onPrimary;
           }
         }
 
@@ -90,12 +90,12 @@ popover.NetworkWindow {
 
             label {
               &:nth-child(1) {
-                color: $subtext1;
+                color: $sky;
                 font-size: to-rem(13px);
               }
 
               &:nth-child(2) {
-                color: $text;
+                color: $onPrimary;
                 font-size: to-rem(13px);
                 font-weight: 500;
               }
@@ -110,7 +110,7 @@ popover.NetworkWindow {
         label {
           font-size: to-rem(16px);
           font-weight: 600;
-          color: $text;
+          color: $onPrimary;
         }
       }
 
@@ -136,7 +136,7 @@ popover.NetworkWindow {
             box {
               icon:first-child {
                 font-size: to-rem(18px);
-                color: $overlay2;
+                color: $onPrimary;
                 margin-right: to-rem(12px);
               }
 
@@ -190,29 +190,29 @@ popover.NetworkWindow {
                 }
 
                 &.active {
-                  background-color: gtkalpha($overlay2, 0.15);
-                  border: to-rem(1px) solid gtkalpha($overlay2, 0.3);
+                  background-color: gtkalpha($onPrimary, 0.15);
+                  border: to-rem(1px) solid gtkalpha($onPrimary, 0.3);
 
                   icon {
-                    color: $overlay2;
+                    color: $onPrimary;
                   }
                 }
 
                 box {
                   icon {
                     font-size: to-rem(18px);
-                    color: $overlay2;
+                    color: $onPrimary;
                     opacity: 0.8;
                   }
 
                   label:nth-child(2) {
-                    color: $text;
+                    color: $onPrimary;
                     font-weight: 500;
                     margin-left: to-rem(8px);
                   }
 
                   label:nth-child(3) {
-                    color: $overlay2;
+                    color: $onPrimary;
                     font-size: to-rem(13px);
                     font-weight: 500;
                   }
@@ -229,7 +229,7 @@ popover.NetworkWindow {
         button {
           @include button;
           padding: to-rem(12px);
-          background-color: $overlay2;
+          background-color: $onPrimary;
           border-radius: to-rem(20px);
           font-weight: 500;
           font-size: to-rem(14px);
@@ -239,7 +239,7 @@ popover.NetworkWindow {
           outline: none;
 
           &:hover {
-            background-color: gtkalpha($overlay2, 0.8);
+            background-color: gtkalpha($onPrimary, 0.8);
             box-shadow: 0 to-rem(2px) to-rem(4px) gtkalpha(black, 0.2);
           }
         }

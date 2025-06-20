@@ -3,7 +3,7 @@
 @mixin window {
   background-color: $crust;
   padding: 1rem;
-  color: $text;
+  color: $onPrimary;
   box-shadow: 0 0 4px 2px $shadow;
 }
 

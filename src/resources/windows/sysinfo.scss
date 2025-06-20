@@ -22,7 +22,7 @@ window.SysInfoWindow {
         > box {
           .distro-logo {
             font-size: to-rem(64px);
-            color: $overlay2;
+            color: $onPrimary;
             margin-right: to-rem(16px);
           }
 
@@ -30,18 +30,18 @@ window.SysInfoWindow {
             .distro-name {
               font-size: to-rem(24px);
               font-weight: 600;
-              color: $text;
+              color: $onPrimary;
             }
 
             .distro-version {
               font-size: to-rem(14px);
               font-weight: 500;
-              color: $overlay2;
+              color: $onPrimary;
             }
 
             .distro-codename {
               font-size: to-rem(13px);
-              color: $subtext1;
+              color: $sky;
             }
           }
         }
@@ -52,12 +52,12 @@ window.SysInfoWindow {
         border-left: to-rem(1px) solid gtkalpha($border, 0.1);
 
         .info-label {
-          color: $overlay2;
+          color: $onPrimary;
           font-size: to-rem(14px);
         }
 
         .info-value {
-          color: $text;
+          color: $onPrimary;
           font-size: to-rem(14px);
           font-weight: 500;
         }
@@ -79,13 +79,13 @@ window.SysInfoWindow {
         }
 
         .info-label {
-          color: $overlay2;
+          color: $onPrimary;
           font-size: to-rem(14px);
           min-width: to-rem(80px);
         }
 
         .info-value {
-          color: $text;
+          color: $onPrimary;
           font-size: to-rem(14px);
           font-weight: 500;
         }

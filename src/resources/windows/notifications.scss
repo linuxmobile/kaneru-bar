@@ -30,7 +30,7 @@ window.notification-popup-window {
 
   .header {
     padding: to-rem(6px) to-rem(10px);
-    color: $subtext1;
+    color: $sky;
     border-radius: to-rem(11px) to-rem(11px) 0 0;
     background-color: gtkalpha($surface1, 0.6);
     border-bottom: to-rem(1px) solid gtkalpha($border, 0.1);
@@ -45,7 +45,7 @@ window.notification-popup-window {
       margin-right: to-rem(5px);
       font-weight: bold;
       font-size: to-rem(14px);
-      color: $overlay2;
+      color: $onPrimary;
     }
 
     .time {
@@ -59,7 +59,7 @@ window.notification-popup-window {
       border-radius: 100%;
       background-color: transparent;
       border: none;
-      color: $overlay2;
+      color: $onPrimary;
       transition: all 200ms ease;
 
       &:hover {
@@ -76,13 +76,13 @@ window.notification-popup-window {
     .summary {
       font-size: to-rem(15px);
       font-weight: 500;
-      color: $text;
+      color: $onPrimary;
       margin-bottom: to-rem(4px);
     }
 
     .body {
       font-size: to-rem(14px);
-      color: $subtext1;
+      color: $sky;
       padding: to-rem(4px) 0;
     }
 
@@ -104,13 +104,13 @@ window.notification-popup-window {
       padding: to-rem(6px) to-rem(14px);
       border-radius: to-rem(8px);
       background-color: gtkalpha($surface1, 0.7);
-      color: $text;
+      color: $onPrimary;
       font-size: to-rem(13px);
       transition: all 200ms ease;
       border: none;
 
       &:hover {
-        background-color: $overlay2;
+        background-color: $onPrimary;
         color: $base;
       }
 

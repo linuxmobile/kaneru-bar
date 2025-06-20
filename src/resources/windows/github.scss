@@ -17,11 +17,11 @@ window.GithubWindow {
 
       icon {
         font-size: to-rem(24px);
-        color: $overlay2;
+        color: $onPrimary;
       }
 
       label {
-        color: $text;
+        color: $onPrimary;
         font-size: to-rem(18px);
         font-weight: 600;
         margin-left: to-rem(4px);
@@ -36,7 +36,7 @@ window.GithubWindow {
       border: to-rem(1px) solid transparent;
 
       label {
-        color: $overlay2;
+        color: $onPrimary;
         font-size: to-rem(13px);
         font-weight: 500;
       }
@@ -51,11 +51,11 @@ window.GithubWindow {
       }
 
       .refresh-button:hover {
-        background-color: gtkalpha($overlay2, 0.1);
+        background-color: gtkalpha($onPrimary, 0.1);
       }
 
       .refresh-button icon {
-        color: $overlay2;
+        color: $onPrimary;
         font-size: to-rem(16px);
       }
     }
@@ -71,7 +71,7 @@ window.GithubWindow {
         padding: to-rem(40px) 0;
 
         label {
-          color: $overlay2;
+          color: $onPrimary;
           font-size: to-rem(14px);
         }
       }
@@ -113,26 +113,26 @@ window.GithubWindow {
         }
 
         .actor-name {
-          color: $overlay2;
+          color: $onPrimary;
           font-weight: 600;
           font-size: to-rem(14px);
         }
 
         .event-type {
-          color: $subtext1;
+          color: $sky;
           font-size: to-rem(14px);
           font-weight: 400;
         }
 
         .repo-name {
-          color: $text;
+          color: $onPrimary;
           font-size: to-rem(14px);
           font-weight: 500;
           margin: to-rem(4px) 0;
         }
 
         .event-time {
-          color: $subtext1;
+          color: $sky;
           font-size: to-rem(12px);
           margin-top: to-rem(4px);
         }

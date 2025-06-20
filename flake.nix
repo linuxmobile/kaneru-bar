@@ -9,11 +9,12 @@
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    systems.url = "github:nix-systems/default-linux";
   };
 
   outputs = inputs:
     inputs.flake-parts.lib.mkFlake {inherit inputs;} {
-      systems = ["x86_64-linux"];
+      systems = import inputs.systems;
       perSystem = {pkgs, ...}: {
         devShells.default = let
           rust-bin = inputs.rust-overlay.lib.mkRustBin {} pkgs;
@@ -35,6 +36,8 @@
               wayland
               adwaita-icon-theme
               dart-sass
+              wlsunset
+              brightnessctl
             ];
 
             nativeBuildInputs = with pkgs; [
@@ -45,6 +48,39 @@
               glib
             ];
           };
+
+        packages.default = pkgs.rustPlatform.buildRustPackage {
+          pname = "kaneru";
+          version = "0.1.0";
+          src = ./.;
+          cargoLock = {
+            lockFile = ./Cargo.lock;
+          };
+          nativeBuildInputs = with pkgs; [
+            pkg-config
+            rustPlatform.bindgenHook
+            pkg-config
+            openssl
+            wrapGAppsHook4
+            glib
+            dart-sass
+          ];
+          buildInputs = with pkgs; [
+            gtk4
+            gtk4-layer-shell
+            libadwaita
+            glib
+            cairo
+            pango
+            gdk-pixbuf
+            graphene
+            wayland
+            adwaita-icon-theme
+            dart-sass
+            wlsunset
+            brightnessctl
+          ];
+        };
       };
     };
 }

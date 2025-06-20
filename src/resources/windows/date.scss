@@ -24,7 +24,7 @@ popover.DatePopupWindow {
 
       icon {
         font-size: to-rem(18px);
-        color: $text;
+        color: $onPrimary;
       }
 
       &:disabled {
@@ -38,7 +38,7 @@ popover.DatePopupWindow {
     .pomodoro-label {
       font-size: to-rem(28px);
       font-weight: 600;
-      color: $overlay2;
+      color: $onPrimary;
       min-width: to-rem(100px);
       margin: 0 to-rem(10px);
     }
@@ -47,7 +47,7 @@ popover.DatePopupWindow {
   .live-clock-label {
     font-size: to-rem(32px);
     font-weight: 500;
-    color: $text;
+    color: $onPrimary;
   }
 
   separator {
@@ -61,7 +61,7 @@ popover.DatePopupWindow {
     font-size: to-rem(14px);
 
     .header {
-      color: $overlay2;
+      color: $onPrimary;
       font-weight: 600;
       padding-bottom: to-rem(8px);
       margin-bottom: to-rem(5px);
@@ -69,13 +69,13 @@ popover.DatePopupWindow {
     }
 
     .day-name {
-      color: $subtext1;
+      color: $sky;
       font-size: to-rem(12px);
       font-weight: 500;
     }
 
     .day-number {
-      color: $text;
+      color: $onPrimary;
       border-radius: to-rem(4px);
       transition: all 150ms ease;
       padding: to-rem(4px);
@@ -98,11 +98,11 @@ popover.DatePopupWindow {
     }
 
     .highlight {
-      color: $subtext1;
+      color: $sky;
     }
 
     .selected {
-      background-color: $overlay2;
+      background-color: $onPrimary;
       color: $base;
       border-radius: to-rem(4px);
     }
@@ -120,7 +120,7 @@ popover.DatePopupWindow {
       }
 
       arrow {
-        color: $overlay2;
+        color: $onPrimary;
       }
     }
   }

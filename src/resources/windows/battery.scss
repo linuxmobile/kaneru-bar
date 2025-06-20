@@ -16,7 +16,7 @@ popover.BatteryWindow {
 
         image {
           font-size: to-rem(48px);
-          color: $overlay2;
+          color: $onPrimary;
           margin-right: to-rem(16px);
         }
 
@@ -24,13 +24,13 @@ popover.BatteryWindow {
           &:first-child {
             font-size: to-rem(18px);
             font-weight: 600;
-            color: $text;
+            color: $onPrimary;
             margin-bottom: to-rem(2px);
           }
 
           &:last-child {
             font-size: to-rem(14px);
-            color: $subtext1;
+            color: $sky;
           }
         }
       }
@@ -47,12 +47,12 @@ popover.BatteryWindow {
 
             label {
               &:nth-child(1) {
-                color: $subtext1;
+                color: $sky;
                 font-size: to-rem(14px);
               }
 
               &:nth-child(2) {
-                color: $text;
+                color: $onPrimary;
                 font-size: to-rem(14px);
                 font-weight: 500;
               }
@@ -67,7 +67,7 @@ popover.BatteryWindow {
         > label {
           font-size: to-rem(16px);
           font-weight: 600;
-          color: $text;
+          color: $onPrimary;
           margin-bottom: to-rem(8px);
         }
 
@@ -86,11 +86,11 @@ popover.BatteryWindow {
             }
 
             &.active {
-              background-color: gtkalpha($overlay2, 0.15);
-              border-color: gtkalpha($overlay2, 0.3);
+              background-color: gtkalpha($onPrimary, 0.15);
+              border-color: gtkalpha($onPrimary, 0.3);
 
               label {
-                color: $overlay2;
+                color: $onPrimary;
                 font-weight: 600;
               }
             }
@@ -98,7 +98,7 @@ popover.BatteryWindow {
             label {
               font-size: to-rem(13px);
               font-weight: 500;
-              color: $text;
+              color: $onPrimary;
             }
           }
         }
@@ -110,7 +110,7 @@ popover.BatteryWindow {
         > label {
           font-size: to-rem(16px);
           font-weight: 600;
-          color: $text;
+          color: $onPrimary;
           margin-bottom: to-rem(8px);
         }
 
@@ -128,25 +128,25 @@ popover.BatteryWindow {
           }
 
           &.active {
-            background-color: gtkalpha($overlay2, 0.15);
-            border-color: gtkalpha($overlay2, 0.3);
+            background-color: gtkalpha($onPrimary, 0.15);
+            border-color: gtkalpha($onPrimary, 0.3);
 
             image:first-child {
-              color: $overlay2;
+              color: $onPrimary;
             }
 
             box label:first-child {
-              color: $overlay2;
+              color: $onPrimary;
             }
 
             image:last-child {
-              color: $overlay2;
+              color: $onPrimary;
             }
           }
 
           image:first-child {
             font-size: to-rem(22px);
-            color: $text;
+            color: $onPrimary;
             margin-right: to-rem(10px);
           }
 
@@ -154,13 +154,13 @@ popover.BatteryWindow {
             label:first-child {
               font-size: to-rem(14px);
               font-weight: 500;
-              color: $text;
+              color: $onPrimary;
               margin-bottom: to-rem(2px);
             }
 
             label:last-child {
               font-size: to-rem(12px);
-              color: $subtext1;
+              color: $sky;
             }
           }
 
@@ -173,14 +173,14 @@ popover.BatteryWindow {
 
       .settings-section {
         .settings-button {
-          background-color: $overlay2;
+          background-color: $onPrimary;
           border-radius: to-rem(20px);
           padding: to-rem(14px);
           transition: all 200ms ease;
           border: none;
 
           &:hover {
-            background-color: gtkalpha($overlay2, 0.8);
+            background-color: gtkalpha($onPrimary, 0.8);
             box-shadow: 0 to-rem(2px) to-rem(4px) gtkalpha(black, 0.2);
           }
 

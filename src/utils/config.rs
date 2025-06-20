@@ -9,6 +9,7 @@ pub enum ModuleType {
     Clock,
     Battery,
     Network,
+    Display,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq, Hash)]
@@ -18,6 +19,14 @@ pub enum NotificationPosition {
     TopRight,
     BottomLeft,
     BottomRight,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq, Hash)]
+#[serde(rename_all = "kebab-case")]
+pub enum DockPosition {
+    Left,
+    Right,
+    Bottom,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -47,6 +56,39 @@ pub struct NetworkConfig {}
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(default)]
+pub struct DockConfig {
+    pub position: DockPosition,
+    pub icon_size: u32,
+    pub auto_hide: bool,
+    pub show_running_apps: bool,
+    pub show_favorites: bool,
+    pub favorites: Vec<String>,
+    pub reveal_delay: u32,
+    pub hide_delay: u32,
+}
+
+impl Default for DockConfig {
+    fn default() -> Self {
+        Self {
+            position: DockPosition::Bottom,
+            icon_size: 48,
+            auto_hide: false,
+            show_running_apps: true,
+            show_favorites: true,
+            favorites: vec![
+                "zen".to_string(),
+                "firefox".to_string(),
+                "nautilus".to_string(),
+                "terminal".to_string(),
+            ],
+            reveal_delay: 200,
+            hide_delay: 1000,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(default)]
 pub struct BarConfig {
     pub font: Option<String>,
     pub modules_left: Vec<ModuleType>,
@@ -59,6 +101,7 @@ pub struct BarConfig {
     pub active_client_max_length: usize,
     pub battery: BatteryConfig,
     pub network: NetworkConfig,
+    pub dock: DockConfig,
 }
 
 impl Default for BarConfig {
@@ -74,6 +117,7 @@ impl Default for BarConfig {
             active_client_max_length: 20,
             battery: BatteryConfig::default(),
             network: NetworkConfig::default(),
+            dock: DockConfig::default(),
         }
     }
 }

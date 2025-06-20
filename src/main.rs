@@ -20,7 +20,7 @@ use utils::{
     BarConfig,
 };
 use widgets::NetworkWidget;
-use windows::{BarWindow, NetworkWindow};
+use windows::{BarWindow, DockWindow, NetworkWindow};
 
 const APP_ID: &str = "com.github.linuxmobile.kaneru";
 
@@ -204,6 +204,8 @@ async fn main() -> glib::ExitCode {
     let bar_window_holder: Rc<RefCell<Option<BarWindow>>> = Rc::new(RefCell::new(None));
     let network_widget_holder: Rc<RefCell<Option<Rc<NetworkWidget>>>> = Rc::new(RefCell::new(None));
     let network_window_holder: Rc<RefCell<Option<Rc<NetworkWindow>>>> = Rc::new(RefCell::new(None));
+    let dock_holder: Rc<RefCell<Option<Rc<DockWindow>>>> = Rc::new(RefCell::new(None));
+
 
     let config_clone_startup = config.clone();
     app.connect_startup(move |_| {
@@ -223,6 +225,8 @@ async fn main() -> glib::ExitCode {
     let bar_window_holder_clone = bar_window_holder.clone();
     let network_widget_holder_clone = network_widget_holder.clone();
     let network_window_holder_clone = network_window_holder.clone();
+    let dock_holder_clone = dock_holder.clone();
+
 
     let net_result_rx_holder = Rc::new(RefCell::new(Some(net_result_rx)));
 
@@ -238,6 +242,11 @@ async fn main() -> glib::ExitCode {
         *network_widget_holder_clone.borrow_mut() = built_bar.network_widget.clone();
         *network_window_holder_clone.borrow_mut() = built_bar.network_window.clone();
         *bar_window_holder_clone.borrow_mut() = Some(built_bar);
+
+        let dock_window = DockWindow::new(app, &config_clone_activate.dock);
+        dock_window.present();
+        *dock_holder_clone.borrow_mut() = Some(dock_window);
+
 
         if network_service_available {
             if let Some(rx) = net_result_rx_holder.borrow_mut().take() {

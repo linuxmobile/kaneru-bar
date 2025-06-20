@@ -3,10 +3,11 @@
 .ActiveClient {
   .app-id {
     font-size: to-rem(13px);
-    color: $overlay2;
+    color: $text;
   }
   .window-title {
     font-size: to-rem(15px);
     font-weight: 600;
+    color: $overlay1;
   }
 }

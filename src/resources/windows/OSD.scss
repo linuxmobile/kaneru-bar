@@ -23,7 +23,7 @@ window.OSDWindow {
       border-radius: to-rem(12px);
 
       highlight {
-        background-color: $overlay2;
+        background-color: $onPrimary;
         background-image: none;
         border-radius: to-rem(12px);
         min-height: to-rem(10px);
@@ -62,7 +62,7 @@ window.OSDWindow {
       }
 
       label {
-        color: $text;
+        color: $onPrimary;
         font-size: to-rem(14px);
         font-weight: 500;
         padding-right: to-rem(8px);
@@ -72,11 +72,11 @@ window.OSDWindow {
 
   .volume-indicator {
     .indicator icon {
-      color: $overlay2;
+      color: $onPrimary;
     }
 
     scale trough highlight {
-      background-color: $overlay2;
+      background-color: $onPrimary;
       background-image: none;
     }
   }
@@ -100,7 +100,7 @@ window.OSDWindow {
       }
 
       label {
-        color: $subtext1;
+        color: $sky;
       }
     }
 
@@ -108,7 +108,7 @@ window.OSDWindow {
       background-color: gtkalpha($surface2, 0.3);
 
       highlight {
-        background-color: $overlay2;
+        background-color: $onPrimary;
         background-image: none;
       }
     }

@@ -4,8 +4,8 @@ use crate::utils::{
     get_distro_icon_name,
     network::NetworkCommand,
 };
-use crate::widgets::{ActiveClientWidget, BatteryWidget, NetworkWidget};
-use crate::windows::{AppMenu, BatteryWindow, DateWindow, NetworkWindow};
+use crate::widgets::{ActiveClientWidget, BatteryWidget, DisplayWidget, NetworkWidget};
+use crate::windows::{AppMenu, BatteryWindow, DateWindow, DisplayControlWindow, NetworkWindow};
 use chrono::Local;
 use glib::source::timeout_add_local;
 use glib::ControlFlow;
@@ -24,6 +24,7 @@ pub struct BarWindow {
     _battery_window: Option<Rc<BatteryWindow>>,
     pub network_widget: Option<Rc<NetworkWidget>>,
     pub network_window: Option<Rc<NetworkWindow>>,
+    _display_window: Option<Rc<DisplayControlWindow>>,
 }
 
 impl BarWindow {
@@ -63,6 +64,7 @@ impl BarWindow {
         let mut battery_window_instance: Option<Rc<BatteryWindow>> = None;
         let mut network_widget_instance: Option<Rc<NetworkWidget>> = None;
         let mut network_window_instance: Option<Rc<NetworkWindow>> = None;
+        let mut display_window_instance: Option<Rc<DisplayControlWindow>> = None;
 
         let fmt = config
             .clock_format
@@ -217,6 +219,12 @@ impl BarWindow {
                         target.append(&error_label);
                     }
                 }
+                ModuleType::Display => {
+                    let display_widget_instance_struct = DisplayWidget::new();
+                    display_window_instance = Some(display_widget_instance_struct.window().clone());
+                    target.append(display_widget_instance_struct.widget());
+                }
+
             }
         };
 
@@ -242,6 +250,7 @@ impl BarWindow {
             _battery_window: battery_window_instance,
             network_widget: network_widget_instance,
             network_window: network_window_instance,
+            _display_window: display_window_instance,
         }
     }
 

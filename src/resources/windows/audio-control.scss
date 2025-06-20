@@ -25,7 +25,7 @@ window.AudioControlWindow {
         .speaker-icon,
         .microphone-icon {
           font-size: to-rem(20px);
-          color: $overlay2;
+          color: $onPrimary;
           margin-right: to-rem(10px);
         }
 
@@ -61,7 +61,7 @@ window.AudioControlWindow {
             highlight {
               border-radius: to-rem(12px);
               min-height: to-rem(10px);
-              background-color: $overlay2;
+              background-color: $onPrimary;
               background-image: none;
               transition: all 0.2s ease;
             }
@@ -74,8 +74,8 @@ window.AudioControlWindow {
 
             highlight {
               min-height: to-rem(14px);
-              background-color: color.scale($overlay2, $lightness: 15%);
-              box-shadow: 0 0 to-rem(6px) gtkalpha($overlay2, 0.4);
+              background-color: color.scale($onPrimary, $lightness: 15%);
+              box-shadow: 0 0 to-rem(6px) gtkalpha($onPrimary, 0.4);
             }
           }
 
@@ -104,7 +104,7 @@ window.AudioControlWindow {
       label {
         font-size: to-rem(16px);
         font-weight: 600;
-        color: $text;
+        color: $onPrimary;
       }
     }
 
@@ -131,7 +131,7 @@ window.AudioControlWindow {
           box {
             icon:first-child {
               font-size: to-rem(18px);
-              color: $overlay2;
+              color: $onPrimary;
               margin-right: to-rem(12px);
             }
 
@@ -172,23 +172,23 @@ window.AudioControlWindow {
             }
 
             &.active {
-              background-color: gtkalpha($overlay2, 0.15);
-              border: to-rem(1px) solid gtkalpha($overlay2, 0.3);
+              background-color: gtkalpha($onPrimary, 0.15);
+              border: to-rem(1px) solid gtkalpha($onPrimary, 0.3);
 
               icon {
-                color: $overlay2;
+                color: $onPrimary;
               }
             }
 
             box {
               icon {
                 font-size: to-rem(18px);
-                color: $overlay2;
+                color: $onPrimary;
                 opacity: 0.8;
               }
 
               label {
-                color: $text;
+                color: $onPrimary;
                 font-weight: 500;
                 font-size: to-rem(14px);
                 margin-left: to-rem(8px);
@@ -205,7 +205,7 @@ window.AudioControlWindow {
       button {
         @include button;
         padding: to-rem(12px);
-        background-color: $overlay2;
+        background-color: $onPrimary;
         border-radius: to-rem(20px);
         font-weight: 500;
         font-size: to-rem(14px);
@@ -214,7 +214,7 @@ window.AudioControlWindow {
         transition: all 200ms ease;
 
         &:hover {
-          background-color: gtkalpha($overlay2, 0.8);
+          background-color: gtkalpha($onPrimary, 0.8);
           box-shadow: 0 0 to-rem(2px) to-rem(4px) gtkalpha(black, 0.2);
         }
       }

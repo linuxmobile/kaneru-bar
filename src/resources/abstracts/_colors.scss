@@ -1,37 +1,37 @@
-$rosewater: #d5d5ca;
-$flamingo: #a3a39a;
-$pink: #d16458;
-$mauve: #a47de9;
-$red: #e55a4f;
-$maroon: #e16458;
-$peach: #e5a55c;
-$yellow: #dba336;
-$green: #8dba64;
-$teal: #56d9ad;
-$sky: #4bbedf;
-$sapphire: #5c9cda;
-$blue: #6a8cef;
-$lavender: #c08adf;
+$rosewater: #d8c1be;
+$flamingo: #e8a08a;
+$pink: #f57f60;
+$mauve: #9f9ec0;
+$red: #c94c4c;
+$maroon: #9e3e3e;
+$peach: #ffb170;
+$yellow: #ffcf70;
+$green: #8ab88a;
+$teal: #78a9ae;
+$sky: #5e95a7;
+$sapphire: #477b8b;
+$blue: #3a6878;
+$lavender: #8b799e;
 
-$text: #d5d5ca;
-$subtext1: #bdc3a8;
-$subtext0: #a3a39a;
-$overlay2: #8a9e6b;
-$overlay1: #474747;
-$overlay0: #2a2e2a;
+$text: #e0e0e0;
+$subtext1: #b0b0b0;
+$subtext0: #808080;
+$overlay2: #283a4f;
+$overlay1: #3c4f64;
+$overlay0: #1a273a;
 
-$surface2: #1d2621;
-$surface1: #141914;
-$surface0: #0f120f;
+$surface2: #1c242c;
+$surface1: #141b21;
+$surface0: #0a1014;
 
-$base: #0a0f0c;
-$mantle: #080c09;
-$crust: #050705;
+$base: #060a0d;
+$mantle: #060a0d;
+$crust: #060a0d;
 
 $fg: $text;
 $bg: $crust;
-$bg1: rgba(29, 38, 33, 0.6);
-$border: #1d2621;
+$bg1: rgba(26, 39, 46, 0.7);
+$border: #212c36;
 $shadow: $crust;
 
 $surfaceVariant: $base;
@@ -42,3 +42,4 @@ $onSurface: $subtext1;
 
 $primary: $blue;
 $onPrimary: $lavender;
+$accent: $peach;

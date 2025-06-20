@@ -2,15 +2,15 @@
 @use "../components/button" as *;
 @use "sass:color";
 
-window.DisplayControlWindow {
+popover.DisplayControlWindow {
   background: transparent;
 
-  > box {
+  > contents > box {
     background-color: $surface0;
     border-radius: to-rem(24px);
     border: to-rem(1px) solid gtkalpha($border, 0.2);
     min-width: to-rem(350px);
-    margin: to-rem(12px) to-rem(60px);
+    /* margin: to-rem(12px) to-rem(60px); */
 
     .section-container {
       background-color: gtkalpha($surface1, 0.5);
@@ -31,20 +31,20 @@ window.DisplayControlWindow {
         .setting-title {
           font-size: to-rem(15px);
           font-weight: 500;
-          color: $text;
+          color: $onPrimary;
         }
 
         .setting-value {
           font-size: to-rem(13px);
           font-weight: 500;
-          color: $overlay2;
+          color: $onPrimary;
           min-width: to-rem(40px);
         }
       }
 
       > box:nth-child(2) {
         .slider-icon {
-          color: $subtext1;
+          color: $sky;
           font-size: to-rem(16px);
           min-width: to-rem(20px);
         }
@@ -62,7 +62,7 @@ window.DisplayControlWindow {
             highlight {
               border-radius: to-rem(12px);
               min-height: to-rem(10px);
-              background-color: $overlay2;
+              background-color: $onPrimary;
               background-image: none;
               transition: all 0.2s ease;
             }
@@ -112,7 +112,7 @@ window.DisplayControlWindow {
         }
 
         &.active {
-          border-color: gtkalpha($overlay2, 0.3);
+          border-color: gtkalpha($onPrimary, 0.3);
         }
 
         &.night-light {
@@ -142,13 +142,13 @@ window.DisplayControlWindow {
         .toggle-icon {
           font-size: to-rem(20px);
           margin: to-rem(3px) 0;
-          color: $text;
+          color: $onPrimary;
         }
 
         .toggle-label {
           font-size: to-rem(12px);
           font-weight: 500;
-          color: $text;
+          color: $onPrimary;
         }
       }
 
@@ -161,13 +161,13 @@ window.DisplayControlWindow {
         .subsetting-title {
           font-size: to-rem(14px);
           font-weight: 500;
-          color: $overlay2;
+          color: $onPrimary;
           margin-bottom: to-rem(8px);
         }
 
         .slider-icon {
           font-size: to-rem(16px);
-          color: $subtext1;
+          color: $sky;
         }
 
         .gamma-slider {
@@ -196,7 +196,7 @@ window.DisplayControlWindow {
           slider {
             min-width: to-rem(18px);
             min-height: to-rem(18px);
-            background-color: $text;
+            background-color: $onPrimary;
             border-radius: 50%;
             box-shadow: 0 to-rem(1px) to-rem(3px) gtkalpha(black, 0.2);
             margin: to-rem(-7px);
@@ -205,7 +205,7 @@ window.DisplayControlWindow {
 
         .slider-label {
           font-size: to-rem(12px);
-          color: $subtext1;
+          color: $sky;
           margin-top: to-rem(4px);
         }
       }
@@ -217,7 +217,7 @@ window.DisplayControlWindow {
       .settings-button {
         @include button;
         padding: to-rem(12px);
-        background-color: $overlay2;
+        background-color: $onPrimary;
         border-radius: to-rem(20px);
         font-weight: 500;
         font-size: to-rem(14px);
@@ -226,7 +226,7 @@ window.DisplayControlWindow {
         transition: all 200ms ease;
 
         &:hover {
-          background-color: gtkalpha($overlay2, 0.9);
+          background-color: gtkalpha($onPrimary, 0.9);
           box-shadow: 0 to-rem(2px) to-rem(4px) gtkalpha(black, 0.2);
         }
       }

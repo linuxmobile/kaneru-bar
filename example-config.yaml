@@ -1,0 +1,41 @@
+font: "Sans 10"
+
+modules-left:
+  - app-menu
+  - active-client
+
+modules-center: []
+
+modules-right:
+  - network
+  - battery
+  - display
+  - clock
+
+notification-position: top-right
+
+active-client-max-length: 20
+
+clock-format: "%A %e, %H:%M"
+
+battery:
+  show-details: true
+  show-power-profiles: true
+  show-conservation-mode: true
+
+network: {}
+
+dock:
+  position: bottom
+  icon-size: 48
+  auto-hide: false
+  show-running-apps: true
+  show-favorites: true
+  favorites:
+    - zen
+    - firefox
+    - nautilus
+    - terminal
+    - code
+  reveal-delay: 200
+  hide-delay: 1000

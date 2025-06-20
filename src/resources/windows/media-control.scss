@@ -22,18 +22,18 @@ window.MediaControlWindow {
       .media-title {
         font-size: to-rem(24px);
         font-weight: 600;
-        color: $overlay2;
+        color: $onPrimary;
       }
 
       .media-artist {
         font-size: to-rem(16px);
         font-weight: 500;
-        color: $text;
+        color: $onPrimary;
       }
 
       .media-album {
         font-size: to-rem(14px);
-        color: $subtext1;
+        color: $sky;
       }
     }
 
@@ -41,7 +41,7 @@ window.MediaControlWindow {
       label {
         font-size: to-rem(12px);
         font-weight: 500;
-        color: $subtext1;
+        color: $sky;
         min-width: to-rem(45px);
       }
 
@@ -53,7 +53,7 @@ window.MediaControlWindow {
           transition: all 200ms ease;
 
           highlight {
-            background-color: $overlay2;
+            background-color: $onPrimary;
             border-radius: to-rem(12px);
             min-height: to-rem(4px);
             transition: all 200ms ease;
@@ -65,7 +65,7 @@ window.MediaControlWindow {
 
           highlight {
             min-height: to-rem(6px);
-            background-color: gtkalpha($overlay2, 0.8);
+            background-color: gtkalpha($onPrimary, 0.8);
           }
         }
 
@@ -93,8 +93,8 @@ window.MediaControlWindow {
         }
 
         &:active {
-          background-color: gtkalpha($overlay2, 0.15);
-          border-color: gtkalpha($overlay2, 0.3);
+          background-color: gtkalpha($onPrimary, 0.15);
+          border-color: gtkalpha($onPrimary, 0.3);
         }
 
         &:disabled {
@@ -102,7 +102,7 @@ window.MediaControlWindow {
         }
 
         icon {
-          color: $text;
+          color: $onPrimary;
 
           &.media-playback-pause-symbolic,
           &.media-playback-start-symbolic {
