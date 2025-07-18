@@ -40,14 +40,12 @@ pub struct DisplayControlWindow {
     ui_elements: Rc<RefCell<Option<DisplayControlWindowUI>>>,
     brightness_value: Rc<RefCell<f64>>,
     night_light_enabled: Rc<RefCell<bool>>,
-    color_temp_value: Rc<RefCell<u32>>,
+
     dark_mode_enabled: Rc<RefCell<bool>>,
     polling_active: Rc<RefCell<bool>>,
     update_source_id: Rc<RefCell<Option<glib::SourceId>>>,
     brightness_update_lock: Rc<RefCell<bool>>,
-    temp_update_lock: Rc<RefCell<bool>>,
-    slider_action_active: Rc<RefCell<bool>>,
-    ui_update_lock: Rc<RefCell<bool>>,
+
     gsettings: Option<gio::Settings>,
     gsettings_changed_handler_id: Rc<RefCell<Option<glib::SignalHandlerId>>>,
     temp_slider_debounce_id: Rc<RefCell<Option<glib::SourceId>>>,
@@ -63,14 +61,13 @@ impl DisplayControlWindow {
         let ui_elements = Rc::new(RefCell::new(None));
         let brightness_value = Rc::new(RefCell::new(0.0));
         let night_light_enabled = Rc::new(RefCell::new(false));
-        let color_temp_value = Rc::new(RefCell::new(DEFAULT_TEMP));
+
         let dark_mode_enabled = Rc::new(RefCell::new(false));
         let polling_active = Rc::new(RefCell::new(false));
         let update_source_id = Rc::new(RefCell::new(None));
         let brightness_update_lock = Rc::new(RefCell::new(false));
-        let temp_update_lock = Rc::new(RefCell::new(false));
-        let slider_action_active = Rc::new(RefCell::new(false));
-        let ui_update_lock = Rc::new(RefCell::new(false));
+
+
 
         let gsettings = gio::SettingsSchemaSource::default()
             .and_then(|source| source.lookup(GSETTINGS_INTERFACE_SCHEMA, true))
@@ -85,14 +82,12 @@ impl DisplayControlWindow {
             ui_elements,
             brightness_value,
             night_light_enabled,
-            color_temp_value,
+
             dark_mode_enabled,
             polling_active,
             update_source_id,
             brightness_update_lock,
-            temp_update_lock,
-            slider_action_active,
-            ui_update_lock,
+
             gsettings,
             gsettings_changed_handler_id,
             temp_slider_debounce_id,
@@ -314,12 +309,8 @@ impl DisplayControlWindow {
                         ui.temp_revealer.set_reveal_child(true);
                         ui.temp_slider.set_sensitive(true);
 
-                        if let Ok(mut temp_lock) = window.temp_update_lock.try_borrow_mut() {
-                            *temp_lock = true;
-                            ui.temp_slider.set_value(kelvin_to_slider(temp));
-                            ui.temp_label.set_label(&format!("{}K", temp));
-                            *temp_lock = false;
-                        }
+                        ui.temp_slider.set_value(kelvin_to_slider(temp));
+                        ui.temp_label.set_label(&format!("{}K", temp));
                     } else {
                         ui.night_light_button.remove_css_class("active");
                         ui.temp_revealer.set_reveal_child(false);
@@ -522,15 +513,13 @@ impl DisplayControlWindow {
                                             let window_weak = Rc::downgrade(&window_clone_brightness);
                                             let _ = glib::idle_add_local_once(move || {
                                                 if let Some(window) = window_weak.upgrade() {
-                                                    if !*window.slider_action_active.borrow() {
-                                                        *window.brightness_update_lock.borrow_mut() = true;
-                                                        *window.brightness_value.borrow_mut() = brightness;
-                                                        if let Some(ui) = window.ui_elements.borrow().as_ref() {
-                                                            ui.brightness_slider.set_value(brightness);
-                                                            ui.brightness_label.set_label(&format!("{}%", (brightness * 100.0).round() as i32));
-                                                        }
-                                                        *window.brightness_update_lock.borrow_mut() = false;
+                                                    *window.brightness_update_lock.borrow_mut() = true;
+                                                    *window.brightness_value.borrow_mut() = brightness;
+                                                    if let Some(ui) = window.ui_elements.borrow().as_ref() {
+                                                        ui.brightness_slider.set_value(brightness);
+                                                        ui.brightness_label.set_label(&format!("{}%", (brightness * 100.0).round() as i32));
                                                     }
+                                                    *window.brightness_update_lock.borrow_mut() = false;
                                                 }
                                             });
                                         },
@@ -561,11 +550,9 @@ impl DisplayControlWindow {
                                                                         let _ = glib::idle_add_local_once(move || {
                                                                             if let Some(window) = window_weak.upgrade() {
                                                                                 window.last_temp_value.store(temp, Ordering::SeqCst);
-                                                                                if !*window.temp_update_lock.borrow() {
-                                                                                    if let Some(ui) = window.ui_elements.borrow().as_ref() {
-                                                                                        ui.temp_slider.set_value(kelvin_to_slider(temp));
-                                                                                        ui.temp_label.set_label(&format!("{}K", temp));
-                                                                                    }
+                                                                                if let Some(ui) = window.ui_elements.borrow().as_ref() {
+                                                                                    ui.temp_slider.set_value(kelvin_to_slider(temp));
+                                                                                    ui.temp_label.set_label(&format!("{}K", temp));
                                                                                 }
                                                                             }
                                                                         });
@@ -597,44 +584,12 @@ impl DisplayControlWindow {
         *self.update_source_id.borrow_mut() = Some(source_id);
     }
 
-    fn stop_polling(self: &Rc<Self>) {
-        if let Some(_source_id) = self.update_source_id.borrow_mut().take() {
-        }
-    }
+
 
     pub fn popover(&self) -> &Popover {
         &self.popover
     }
-    
-    pub fn refresh_ui_state(&self) {
-        let window_clone = Rc::new(self.clone());
-        glib::idle_add_local_once(move || {
-            let handle = tokio::runtime::Handle::current();
-            let _ = handle.block_on(async {
-                if let Ok(brightness) = get_brightness().await {
-                    window_clone.brightness_value.replace(brightness);
-                    if let Some(ui) = window_clone.ui_elements.borrow().as_ref() {
-                        ui.brightness_slider.set_value(brightness);
-                        ui.brightness_label.set_label(&format!("{}%", (brightness * 100.0).round() as i32));
-                    }
-                }
-                
-                if let Ok(night_light) = is_night_light_on().await {
-                    window_clone.update_night_light_state(Some(night_light));
-                    
-                    if night_light {
-                        if let Ok(temp) = get_color_temperature().await {
-                            window_clone.last_temp_value.store(temp, Ordering::SeqCst);
-                            if let Some(ui) = window_clone.ui_elements.borrow().as_ref() {
-                                ui.temp_slider.set_value(kelvin_to_slider(temp));
-                                ui.temp_label.set_label(&format!("{}K", temp));
-                            }
-                        }
-                    }
-                }
-            });
-        });
-    }
+
 }
 
 

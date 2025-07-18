@@ -4,8 +4,7 @@ popover.DatePopupWindow {
   background-color: $surface0;
   border-radius: to-rem(12px);
   border: to-rem(1px) solid gtkalpha($border, 0.2);
-  padding: 0;
-  margin-top: to-rem(32px);
+  padding: to-rem(12px);
 
   .pomodoro-controls {
     button.pomodoro-button {

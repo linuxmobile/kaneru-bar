@@ -36,7 +36,7 @@
               wayland
               adwaita-icon-theme
               dart-sass
-              wlsunset
+              gammastep
               brightnessctl
             ];
 
@@ -77,7 +77,7 @@
             wayland
             adwaita-icon-theme
             dart-sass
-            wlsunset
+            gammastep
             brightnessctl
           ];
         };

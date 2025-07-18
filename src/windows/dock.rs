@@ -286,7 +286,7 @@ impl DockWindow {
 
             let icon = Image::builder()
                 .icon_name(&icon_name)
-                .pixel_size(44)
+                .pixel_size(40)
                 .build();
 
             let button_box = GtkBox::new(Orientation::Vertical, 0);
