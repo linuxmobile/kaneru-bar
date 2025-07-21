@@ -129,16 +129,20 @@ impl NotificationPopup {
         let id_clone = notification_id;
         let is_closing_clone = is_closing.clone();
         close_button.connect_clicked(move |_| {
-            if *is_closing_clone.borrow() {
-                return;
-            }
-            *is_closing_clone.borrow_mut() = true;
-            let sender = sender_clone.clone();
-            let id = id_clone;
-            glib::MainContext::default().spawn_local(async move {
-                if let Err(_e) = sender.send(PopupCommand::Close(id)).await {}
-            });
-        });
+    if *is_closing_clone.borrow() {
+        eprintln!("[NotificationPopup] Close button clicked, but already closing (id={})", id_clone);
+        return;
+    }
+    *is_closing_clone.borrow_mut() = true;
+    let sender = sender_clone.clone();
+    let id = id_clone;
+    eprintln!("[NotificationPopup] Close button clicked, sending PopupCommand::Close({})", id);
+    glib::MainContext::default().spawn_local(async move {
+        if let Err(e) = sender.send(PopupCommand::Close(id)).await {
+            eprintln!("[NotificationPopup] Failed to send PopupCommand::Close({}): {}", id, e);
+        }
+    });
+});
         header_box.append(&close_button);
 
         main_box.append(&header_box);
@@ -334,37 +338,55 @@ impl NotificationPopup {
     }
 
     pub fn close_popup(&mut self) {
-        if *self.is_closing.borrow() {
-            return;
-        }
-        *self.is_closing.borrow_mut() = true;
+    if *self.is_closing.borrow() {
+        eprintln!("[NotificationPopup] close_popup called, but already closing (id={})", self.notification_id);
+        return;
+    }
+    *self.is_closing.borrow_mut() = true;
+    eprintln!("[NotificationPopup] close_popup called for id={}", self.notification_id);
 
-        if let Some(source_id) = self.close_timer_source_id.borrow_mut().take() {
-            let _ = source_id.remove();
-        }
+    if let Some(source_id) = self.close_timer_source_id.borrow_mut().take() {
+        let _ = source_id.remove();
+        eprintln!("[NotificationPopup] Removed close timer for id={}", self.notification_id);
+    }
 
-        if let Some(revealer) = self
-            .window
-            .child()
-            .and_then(|w| w.downcast::<Revealer>().ok())
-        {
-            if revealer.reveals_child() {
-                revealer.set_reveal_child(false);
-                let window_clone = self.window.clone();
-                let transition_duration = revealer.transition_duration();
-                glib::timeout_add_local_once(
-                    Duration::from_millis(transition_duration as u64 + 50),
-                    move || {
-                        window_clone.destroy();
-                    },
-                );
-            } else {
-                self.window.destroy();
-            }
-        } else {
-            self.window.destroy();
+    let mut destroyed = false;
+    if let Some(revealer) = self
+        .window
+        .child()
+        .and_then(|w| w.downcast::<Revealer>().ok())
+    {
+        if revealer.reveals_child() {
+            revealer.set_reveal_child(false);
+let window_clone = self.window.clone();
+let transition_duration = revealer.transition_duration();
+let id = self.notification_id;
+eprintln!("[NotificationPopup] Starting slide-out animation for id={}, duration={}ms", id, transition_duration);
+glib::timeout_add_local_once(
+    Duration::from_millis(transition_duration as u64 + 50),
+    move || {
+        eprintln!("[NotificationPopup] Destroying window after animation (id={})", id);
+        window_clone.destroy();
+    },
+);            destroyed = true;
         }
     }
+    if !destroyed {
+        eprintln!("[NotificationPopup] Destroying window immediately (id={})", self.notification_id);
+        self.window.destroy();
+    }
+
+    // Fallback: force destroy after 1s if not already destroyed
+    let window_clone = self.window.clone();
+    let id = self.notification_id;
+    glib::timeout_add_local_once(Duration::from_secs(1), move || {
+        if window_clone.is_visible() {
+            eprintln!("[NotificationPopup] Fallback: Forcing window destroy after 1s (id={})", id);
+            window_clone.destroy();
+        }
+    });
+}
+
 
     fn reset_close_timer(&mut self, notification: &Notification) {
         if let Some(source_id) = self.close_timer_source_id.borrow_mut().take() {

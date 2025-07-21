@@ -25,8 +25,6 @@ pub enum NiriError {
     },
 }
 
-
-
 impl fmt::Display for NiriError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
