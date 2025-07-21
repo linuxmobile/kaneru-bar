@@ -12,6 +12,7 @@ pub struct NetworkWidget {
     command_sender: mpsc::Sender<NetworkCommand>,
     details: Rc<RefCell<Option<WifiDetails>>>,
     _update_source_id: Rc<RefCell<Option<glib::SourceId>>>,
+    last_icon_name: RefCell<Option<String>>,
 }
 
 impl NetworkWidget {
@@ -34,14 +35,14 @@ impl NetworkWidget {
             .build();
         container.add_css_class("wifi-button");
 
-        let widget = Rc::new(Self {
-            container,
-            icon,
-            command_sender: command_sender.clone(),
-            details: Rc::new(RefCell::new(None)),
-            _update_source_id: Rc::new(RefCell::new(None)),
-        });
-
+let widget = Rc::new(Self {
+    container,
+    icon,
+    command_sender: command_sender.clone(),
+    details: Rc::new(RefCell::new(None)),
+    _update_source_id: Rc::new(RefCell::new(None)),
+    last_icon_name: RefCell::new(None),
+});
         let widget_clone = widget.clone();
         widget.container.connect_destroy(move |_| {
             let _ = &widget_clone;
@@ -101,17 +102,20 @@ impl NetworkWidget {
         }
     }
 
-    fn update_ui_from_state(&self) {
-        let details_opt = self.details.borrow();
-        if let Some(details) = details_opt.as_ref() {
+fn update_ui_from_state(&self) {
+    let details_opt = self.details.borrow();
+    if let Some(details) = details_opt.as_ref() {
+        let mut last_icon = self.last_icon_name.borrow_mut();
+        if last_icon.as_deref() != Some(&details.icon_name) {
             self.icon.set_icon_name(Some(&details.icon_name));
-            self.container.set_visible(true);
-        } else {
-            self.set_error_state();
+            *last_icon = Some(details.icon_name.clone());
+            self.container.queue_draw();
         }
-        self.container.queue_draw();
+        self.container.set_visible(true);
+    } else {
+        self.set_error_state();
     }
-
+}
     fn set_error_state(&self) {
         self.icon
             .set_icon_name(Some("network-wireless-offline-symbolic"));

@@ -1,5 +1,6 @@
 use crate::generated;
-use std::{error::Error, sync::OnceLock};
+use std::error::Error;
+use std::sync::OnceLock;
 
 const CSS_RESOURCE_PATH: &str = "/com/github/linuxmobile/kaneru/style.css";
 
@@ -34,26 +35,38 @@ fn load_resources_once() -> Result<(), String> {
     }).clone()
 }
 
+thread_local! {
+    static CSS_PROVIDER: std::cell::RefCell<Option<gtk4::CssProvider>> = std::cell::RefCell::new(None);
+}
+
 pub fn load_css_from_resource() -> Result<gtk4::CssProvider, Box<dyn Error>> {
     load_resources_once()
         .map_err(|e| format!("Failed to load/register embedded GResource: {}", e))?;
 
-    let provider = gtk4::CssProvider::new();
-    println!(
-        "Attempting to load CSS provider from resource: {}",
-        CSS_RESOURCE_PATH
-    );
+    let provider = CSS_PROVIDER.with(|cell| {
+        let mut opt = cell.borrow_mut();
+        if let Some(ref provider) = *opt {
+            provider.clone()
+        } else {
+            let provider = gtk4::CssProvider::new();
+            println!(
+                "Attempting to load CSS provider from resource: {}",
+                CSS_RESOURCE_PATH
+            );
 
-    if gio::resources_lookup_data(CSS_RESOURCE_PATH, gio::ResourceLookupFlags::NONE).is_err() {
-        eprintln!(
-            "WARNING: CSS resource '{}' still not found before loading into provider.",
-            CSS_RESOURCE_PATH
-        );
-    }
+            if gio::resources_lookup_data(CSS_RESOURCE_PATH, gio::ResourceLookupFlags::NONE).is_err() {
+                eprintln!(
+                    "WARNING: CSS resource '{}' still not found before loading into provider.",
+                    CSS_RESOURCE_PATH
+                );
+            }
 
-    provider.load_from_resource(CSS_RESOURCE_PATH);
-
-    println!("CSS Provider created and potentially loaded from resource.");
+            provider.load_from_resource(CSS_RESOURCE_PATH);
+            println!("CSS Provider created and potentially loaded from resource.");
+            *opt = Some(provider.clone());
+            provider
+        }
+    });
     Ok(provider)
 }
 

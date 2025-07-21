@@ -11,6 +11,8 @@ pub struct BatteryWidget {
     label: Label,
     _service: Rc<RefCell<BatteryService>>,
     _update_source_id: RefCell<Option<glib::SourceId>>,
+    last_icon_name: RefCell<Option<String>>,
+    last_percentage: RefCell<Option<String>>,
 }
 
 impl BatteryWidget {
@@ -33,14 +35,15 @@ impl BatteryWidget {
             .build();
         container.add_css_class("battery-button");
 
-        let widget = Rc::new(Self {
-            container,
-            icon,
-            label,
-            _service: service.clone(),
-            _update_source_id: RefCell::new(None),
-        });
-
+let widget = Rc::new(Self {
+    container,
+    icon,
+    label,
+    _service: service.clone(),
+    _update_source_id: RefCell::new(None),
+    last_icon_name: RefCell::new(None),
+    last_percentage: RefCell::new(None),
+});
         let widget_clone = widget.clone();
         widget.container.connect_destroy(move |_| {
             let _ = &widget_clone;
@@ -49,37 +52,48 @@ impl BatteryWidget {
         let weak_self = Rc::downgrade(&widget);
         let service_clone = service;
 
-        let update_ui = move |strong_self: &BatteryWidget| {
-            let result = {
-                let mut service_borrow = service_clone.borrow_mut();
-                service_borrow.get_primary_battery_details()
-            };
+let update_ui = move |strong_self: &BatteryWidget| {
+    let result = {
+        let mut service_borrow = service_clone.borrow_mut();
+        service_borrow.get_primary_battery_details()
+    };
 
-            match result {
-                Ok(info) => {
-                    let icon_name = info
-                        .icon_name
-                        .as_deref()
-                        .unwrap_or("battery-missing-symbolic");
-                    strong_self.icon.set_icon_name(Some(icon_name));
-                    let percentage_text = format!("{:.0}%", info.percentage.unwrap_or(0.0));
-                    strong_self.label.set_text(&percentage_text);
-                    strong_self.container.set_visible(true);
-                }
-                Err(e) => {
-                    strong_self
-                        .icon
-                        .set_icon_name(Some("battery-missing-symbolic"));
-                    strong_self.label.set_text("");
-                    strong_self.container.set_visible(true);
-                    if matches!(e, BatteryUtilError::NoBatteryFound) {
-                        strong_self.container.set_visible(false);
-                    }
-                }
+    match result {
+        Ok(info) => {
+            let icon_name = info
+                .icon_name
+                .as_deref()
+                .unwrap_or("battery-missing-symbolic");
+            let percentage_text = format!("{:.0}%", info.percentage.unwrap_or(0.0));
+            let mut last_icon = strong_self.last_icon_name.borrow_mut();
+            let mut last_percentage = strong_self.last_percentage.borrow_mut();
+            let icon_changed = last_icon.as_deref() != Some(icon_name);
+            let percent_changed = last_percentage.as_deref() != Some(&percentage_text);
+            if icon_changed {
+                strong_self.icon.set_icon_name(Some(icon_name));
+                *last_icon = Some(icon_name.to_string());
             }
-            strong_self.container.queue_draw();
-        };
-
+            if percent_changed {
+                strong_self.label.set_text(&percentage_text);
+                *last_percentage = Some(percentage_text.clone());
+            }
+            if icon_changed || percent_changed {
+                strong_self.container.queue_draw();
+            }
+            strong_self.container.set_visible(true);
+        }
+        Err(e) => {
+            strong_self
+                .icon
+                .set_icon_name(Some("battery-missing-symbolic"));
+            strong_self.label.set_text("");
+            strong_self.container.set_visible(true);
+            if matches!(e, BatteryUtilError::NoBatteryFound) {
+                strong_self.container.set_visible(false);
+            }
+        }
+    }
+};
         update_ui(&widget);
 
         let source_id =

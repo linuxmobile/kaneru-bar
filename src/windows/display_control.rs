@@ -16,7 +16,7 @@ use gtk4::{
 };
 use gtk4::{Box as GtkBox};
 
-const REFRESH_INTERVAL_WINDOW: u32 = 2000;
+const REFRESH_INTERVAL_WINDOW: u32 = 5000;
 const TEMP_SLIDER_DEBOUNCE_MS: u64 = 500;
 
 const GSETTINGS_INTERFACE_SCHEMA: &str = "org.gnome.desktop.interface";
